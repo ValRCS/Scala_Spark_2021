@@ -40,6 +40,9 @@ object StructuredAPIOverview extends App {
   arrRow.slice(0,4).foreach(r => println(r.get(0))) //so this gets us first field of the row
   arrRow.slice(3,9).foreach(r => println(r.getAs("myNumber"))) //so this gets field by name
 
+  import org.apache.spark.sql.types._ //so this gets us access to Spark data types
+  val b = ByteType //so b is just a shortcute to ByteType
+
 
 
 
