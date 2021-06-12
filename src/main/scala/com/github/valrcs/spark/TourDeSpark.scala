@@ -3,6 +3,7 @@ package com.github.valrcs.spark
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.dsl.expressions.StringToAttributeConversionHelper
 import org.apache.spark.sql.{Encoder, Encoders}
+import org.apache.spark.ml.feature.OneHotEncoder
 
 import scala.io.StdIn
 
@@ -115,4 +116,92 @@ ORDER BY `sum(total_cost)` DESC
   }
   //we would want to gracefully shut down our stream as well
   println("All done streaming")
+
+  //Machine Learning Demo
+  staticDataFrame.printSchema()
+
+  // in Scala
+  import org.apache.spark.sql.functions.date_format
+  val preppedDataFrame = staticDataFrame
+    .na.fill(0) //fill the empty areas with 0 // in ML 0 might not always be the best answer
+    .withColumn("day_of_week", date_format(col("InvoiceDate"), "EEEE"))
+    .coalesce(5)
+
+  // in Scala
+  //in Real Life we would probably want to do stratified random split across all dates
+  val trainDataFrame = preppedDataFrame
+    .where("InvoiceDate < '2011-07-01'")
+  val testDataFrame = preppedDataFrame
+    .where("InvoiceDate >= '2011-07-01'")
+
+  println(trainDataFrame.count())
+  println(testDataFrame.count())
+
+  // in Scala
+  import org.apache.spark.ml.feature.StringIndexer
+  val indexer = new StringIndexer()
+    .setInputCol("day_of_week")
+    .setOutputCol("day_of_week_index")
+
+  //This will turn our days of weeks into corresponding numerical values. For example, Spark might
+  //represent Saturday as 6, and Monday as 1. However, with this numbering scheme, we are
+  //implicitly stating that Saturday is greater than Monday (by pure numerical values). This is
+  //obviously incorrect. To fix this, we therefore need to use a OneHotEncoder to encode each of
+  //these values as their own column. These Boolean flags state whether that day of week is the
+  //relevant day of the week:
+
+  // in Scala
+  //https://en.wikipedia.org/wiki/One-hot
+
+  val encoder = new OneHotEncoder()
+    .setInputCol("day_of_week_index")
+    .setOutputCol("day_of_week_encoded")
+
+  // in Scala
+  import org.apache.spark.ml.feature.VectorAssembler
+  val vectorAssembler = new VectorAssembler()
+    .setInputCols(Array("UnitPrice", "Quantity", "day_of_week_encoded"))
+    .setOutputCol("features")
+
+  //Here, we have three key features: the price, the quantity, and the day of week. Next, we’ll set this
+  //up into a pipeline so that any future data we need to transform can go through the exact same
+  //process:
+
+  // in Scala
+  import org.apache.spark.ml.Pipeline
+  val transformationPipeline = new Pipeline()
+    .setStages(Array(indexer, encoder, vectorAssembler))
+
+  // in Scala
+  val fittedPipeline = transformationPipeline.fit(trainDataFrame)
+
+  // in Scala
+  val transformedTraining = fittedPipeline.transform(trainDataFrame)
+
+  // in Scala
+  import org.apache.spark.ml.clustering.KMeans
+  val kmeans = new KMeans()
+    .setK(20) //this is where you would make a guess on how many different groupings you want
+    //this is Kmeans specific, Kmeans NEEDS to know how many groups to split your data
+    .setSeed(1L)
+
+  // in Scala
+  val kmModel = kmeans.fit(transformedTraining)
+
+  // in Scala
+  val transformedTest = fittedPipeline.transform(testDataFrame)
+
+  println("Our Kmeans fit results")
+  transformedTest.show()
+
+  transformedTest.coalesce(1)
+    .select("Quantity","day_of_week", "day_of_week_index", "InvoiceNo")
+    //first we need to fall back to single partition
+    .write
+    .option("header","true")
+    .option("sep",",")
+    .mode("overwrite") //meaning we will overwrite old data with same file name
+    .csv("./src/resources/csv/kmeans-results.csv")
+
+
 }
