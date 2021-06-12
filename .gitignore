@@ -125,3 +125,7 @@ fabric.properties
 /src/resources/csv/kmeans-results.csv/.part-00000-982dd1aa-c47a-4037-a8a4-4fee68fcb848-c000.csv.crc
 /src/resources/csv/kmeans-results.csv/_SUCCESS
 /src/resources/csv/kmeans-results.csv/part-00000-982dd1aa-c47a-4037-a8a4-4fee68fcb848-c000.csv
+/src/resources/csv/foods.csv/._SUCCESS.crc
+/src/resources/csv/foods.csv/.part-00000-0a6c6f8c-8984-4a1f-aaa9-034ca8a3df89-c000.csv.crc
+/src/resources/csv/foods.csv/_SUCCESS
+/src/resources/csv/foods.csv/part-00000-0a6c6f8c-8984-4a1f-aaa9-034ca8a3df89-c000.csv
