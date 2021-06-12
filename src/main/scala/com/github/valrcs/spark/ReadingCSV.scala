@@ -1,6 +1,8 @@
 package com.github.valrcs.spark
 
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions.max
+import scala.io.StdIn
 
 object ReadingCSV extends App {
   println(s"Reading CSVs with Scala version: ${util.Properties.versionNumberString}")
@@ -57,6 +59,13 @@ GROUP BY DEST_COUNTRY_NAME
 
   //of course Spark is a bit of overkill for working just with single small CSVs
 
+//  //let's delay ending our Spark session
+//  val rawInput = StdIn.readLine("Enter anything and press Enter to end")
+  println(spark.sql("SELECT max(count) from flight_data_2015").take(1).mkString("MyArray(", ", ", ")")) //this is what you would use if you want to export some outside
+  spark.sql("SELECT max(count) from flight_data_2015").show(1)
+
+ //Scala way of the above sql
+  flightData2015.select(max("count")).show(1)
 
 
 }
