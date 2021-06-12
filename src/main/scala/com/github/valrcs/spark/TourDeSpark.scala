@@ -113,5 +113,6 @@ ORDER BY `sum(total_cost)` DESC
         .show(5)
     rawInput = StdIn.readLine("enter q(uit) to quit otherwise anything else continues")
   }
+  //we would want to gracefully shut down our stream as well
   println("All done streaming")
 }
