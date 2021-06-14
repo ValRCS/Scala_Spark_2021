@@ -2,5 +2,5 @@
 {"name": "carrots", "price": 0.35, "quantityKg": 210 }
 {"name": "onions", "price": 0.32, "quantityKg": 10 }
 {"name": "beets", "price": 0.29, "quantityKg": 25 }
-{"name": "kale", "price": 1.25, "quantityKg": 4 }
-{"name": "VW", "model": "Golf", "mileage": 250000}
+{"name": "kale", "price": 1.25, "quantityKg": 1 }
+{"name": "VW", "model": "Golf", "mileage": 250000,"price":550,  "quantityKg": 1200 }

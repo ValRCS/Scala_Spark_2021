@@ -59,11 +59,52 @@ object BasicStructuredOperations extends App {
 
   println(properDf.schema)
 
-  df.coalesce(1)
+  df
+//    .coalesce(2) //if you want a guaranteed single file you want coalesce(1)
     //first we need to fall back to single partition
     .write
     .option("header","true")
     .option("sep",",")
     .mode("overwrite") //meaning we will overwrite old data with same file name
     .csv("./src/resources/csv/foods.csv")
+
+  //Columns
+  //To Spark, columns are logical constructions that simply represent a value computed on a per-
+  //record basis by means of an expression. This means that to have a real value for a column, we
+  //need to have a row; and to have a row, we need to have a DataFrame. You cannot manipulate an
+  //individual column outside the context of a DataFrame; you must use Spark transformations
+  //within a DataFrame to modify the contents of a column.
+
+  import org.apache.spark.sql.functions.{col, column}
+  import spark.implicits._
+  df.select($"price",$"name").show()
+  df.select("price", "name","model").show()
+  df.select($"price"+50,$"name").show() //we can do math using implicit $ for columns
+  val bigPrice = ((df.col("price")+50)*100)
+  val ndf = df.withColumn("bigPrice",bigPrice) //added new column bigPrice
+  //we compare two columns and result is asigned to new column
+  val priceVsQuantity = (df.col("price") > df.col("quantityKg"))
+  //we add this new column to ndf (but do not save it yet)
+  ndf.withColumn("priceVsQuantity", priceVsQuantity).show()
+
+  //lets do the above with SQL
+  //first we need a view
+  df.createOrReplaceTempView("foodies")
+  spark.sql("SELECT * FROM foodies").show()
+
+  //to create new columns with SQL we simply select the new column
+  val sdf = spark.sql("SELECT *, (price+50)*100 as bigPrice FROM foodies")
+  sdf.show()
+
+  sdf.createOrReplaceTempView("sdfView")
+  val cdf = spark.sql("SELECT *, price > quantityKg as priceVsQnty FROM sdfView")
+  cdf.show()
+  //in fact for creating multiple columns at once it is recommended to use SQL select syntax
+  //https://sparkbyexamples.com/spark/spark-dataframe-withcolumn#add-replace-update-multiple-columns
+
+  //TODO exercise
+  //TODO create a new Dataframe which has ALL columns from properDf  and also newPrice which is 10% higher than existing price
+  //TODO create a Dataframe of all columns above Dataframe with only rows where price is less than 1.00
+  //use mydf.show() to show end results
+  //remember you need to create a temporary view for properDF first!!
 }
