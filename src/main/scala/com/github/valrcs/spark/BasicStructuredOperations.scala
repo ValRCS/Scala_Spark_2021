@@ -134,7 +134,9 @@ object BasicStructuredOperations extends App {
   // in Scala
   import org.apache.spark.sql.Row
   //we are creating a standalone Row with no relation to anything just yet
-  val myRow = Row(300000, "XC90", "Volvo", 10000, 2000, Seq("Centrs","Jurmala"), true, 12500)
+  val myRow = Row(300000, "XC90", "Volvo",
+    10000, 2000, Seq("Centrs","Jurmala"),
+    true, 12500)
   // in Scala
   println(myRow(0))// type Any
   println(myRow(0).toString) //this casts Any to Scala String type, will work with pretty much anything
@@ -219,5 +221,53 @@ object BasicStructuredOperations extends App {
   // in Scala
   //With select expression, we can also specify aggregations over the entire DataFrame
   fdf.selectExpr("avg(count)", "count(distinct(DEST_COUNTRY_NAME))").show(2)
+  //-- in SQL
+  //SELECT avg(count), count(distinct(DEST_COUNTRY_NAME)) FROM dfTable LIMIT 2
   //TODO produce purse SQL version of the above line (we already have most of the syntax place just need a view
+  fdf.createOrReplaceTempView("flightView")
+  spark.sql("SELECT avg(count), count(distinct(DEST_COUNTRY_NAME)) FROM flightView LIMIT 2").show() //2 is not needed because of LIMIT 2
+
+  // in Scala
+  import org.apache.spark.sql.functions.lit
+  fdf.select(expr("*"), lit(1).as("One")).show(3)
+
+  spark.sql("SELECT *, 1 as One, current_timestamp() as TimeStamp FROM flightView LIMIT 4").show(15, false)
+  //truncate = false will show all column contents for the rows we are working on
+
+  // in Scala
+  fdf.withColumn("numberFortyTwo", lit(42)).show(6)
+
+  // in Scala
+  fdf.withColumn("withinCountry", expr("ORIGIN_COUNTRY_NAME == DEST_COUNTRY_NAME"))
+    .show(12)
+
+  //creating new column based on existing column
+  fdf.withColumn("Destination", expr("DEST_COUNTRY_NAME")).show(3)
+
+  //a bit more correct would be to use the premade method for renaming columns
+  //we can chain them like most things in Spark
+  // in Scala
+  fdf
+    .withColumnRenamed("DEST_COUNTRY_NAME", "dest")
+    .withColumnRenamed("count", "NumFlights")
+    .show(3)
+
+  //same as above but with sql
+  spark.sql("SELECT DEST_COUNTRY_NAME as dest, ORIGIN_COUNTRY_NAME, count as NumFlights FROM flightView").show(3)
+
+  // in Scala
+  import org.apache.spark.sql.functions.expr
+  val dfWithLongColName = fdf.withColumn(
+    "This Long Column-Name",
+    expr("ORIGIN_COUNTRY_NAME")) //here our column name is with underscores so no need for backticks
+
+  //We don’t need escape characters here because the first argument to withColumn is just a string
+  //for the new column name. In NEXT example, however, we need to use backticks because we’re
+  //referencing a column in an expression
+
+  // in Scala
+  dfWithLongColName.selectExpr(
+    "`This Long Column-Name`",
+    "`This Long Column-Name` as `new country origin`") //we need the backticks because we are referencing columns in an expression
+    .show(2)
 }
