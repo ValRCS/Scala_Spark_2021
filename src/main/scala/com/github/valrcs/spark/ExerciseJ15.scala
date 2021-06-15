@@ -15,5 +15,6 @@ object ExerciseJ15 extends App {
 
   //TODO create new DataFrame with flight count over 1000
   //TODO Also FILTER off Canada and Ireland
+  //TODO bonus figure out how to order by top results and show top 10
 
 }
