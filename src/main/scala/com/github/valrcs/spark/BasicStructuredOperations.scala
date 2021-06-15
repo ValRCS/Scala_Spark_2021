@@ -322,4 +322,70 @@ object BasicStructuredOperations extends App {
   println(fdf.select("ORIGIN_COUNTRY_NAME").distinct().count())
   spark.sql("SELECT COUNT(DISTINCT ORIGIN_COUNTRY_NAME) FROM flightView").show(1)
 
+  //Random Samples
+  //Sometimes, you might just want to sample some random records from your DataFrame. You can
+  //do this by using the sample method on a DataFrame, which makes it possible for you to specify
+  //a fraction of rows to extract from a DataFrame and whether you’d like to sample with or without
+  //replacement:
+
+  val seed = 5 //specific seed value guarantees specific pseudo-random values /without seed you will have different values each time
+  val withReplacement = false
+  val fraction = 0.2 //20%
+  fdf.sample(withReplacement, fraction, seed).show()
+  println(fdf.sample(withReplacement, fraction, seed).count()) //TODO why 34 not 25 or 26?
+
+  //Random Splits
+  //Random splits can be helpful when you need to break up your DataFrame into a random “splits”
+  //of the original DataFrame. This is often used with machine learning algorithms to create training,
+  //validation, and test sets. In this next example, we’ll split our DataFrame into two different
+  //DataFrames by setting the weights by which we will split the DataFrame (these are the
+  //arguments to the function). Because this method is designed to be randomized, we will also
+  //specify a seed (just replace seed with a number of your choosing in the code block). It’s
+  //important to note that if you don’t specify a proportion for each DataFrame that adds up to one,
+  //they will be normalized so that they do:
+
+  // in Scala
+  val dataFrames = fdf.randomSplit(Array(0.25, 0.75), seed)
+  //weights – weights for splits, will be normalized if they don't sum to 1.
+  //seed – Seed for sampling.
+  dataFrames.foreach(df => println(df.count()))
+
+  val dataFrames2 = fdf.randomSplit(Array(3, 7), seed) //so one side will have 3/10 of rows another 7/10 of rows randomly selected with seed
+  dataFrames2.foreach(df => println(df.count()))
+
+  //Concatenating and Appending Rows (Union)
+  //As you learned in the previous section, DataFrames are immutable. This means users cannot
+  //append to DataFrames because that would be changing it. To append to a DataFrame, you must
+  //union the original DataFrame along with the new DataFrame. This just concatenates the two
+  //DataFramess. To union two DataFrames, you must be sure that they have the same schema and
+  //number of columns; otherwise, the union will fail.
+
+  val schema = fdf.schema //this is crucial that we have the right schema for our union
+  val newRows = Seq(
+    Row("New Country", "Other Country", 5L),
+    Row("New Country 2", "Other Country 3", 1L)
+  )
+  val parallelizedRows = spark.sparkContext.parallelize(newRows) //we create a lower level RDD of our Rows
+  val newDF = spark.createDataFrame(parallelizedRows, schema)
+  fdf.union(newDF)
+    .where("count = 1")
+    .where($"ORIGIN_COUNTRY_NAME" =!= "United States")
+    .show() // get all of them and we'll see our new rows at the end
+
+  //it does matter whether we do union before or after filters
+  fdf
+    .where(col("ORIGIN_COUNTRY_NAME") === "Estonia")
+    .union(newDF) //here we should only have 3 rows the Estonia one and the 2 new ones
+    .show()
+
+  //filtering with OR
+  //https://sparkbyexamples.com/spark/spark-dataframe-where-filter/
+  //multiple condition
+  fdf.filter(fdf("ORIGIN_COUNTRY_NAME") === "Estonia"
+    || fdf("DEST_COUNTRY_NAME") === "Estonia"
+    || col("ORIGIN_COUNTRY_NAME") === "Lithuania" //so we can use col and also the actual dataframe
+  ) // || indicates OR
+    .show(false)
+
+  //TODO sorting again
 }
