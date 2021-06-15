@@ -151,9 +151,9 @@ object BasicStructuredOperations extends App {
   //it is possible to create a DataFrame out of sequence of Rows and manual Schema
   import org.apache.spark.sql.types.{StructField, StructType, StringType, LongType}
   val myManualSchema2 = new StructType(Array(
-    new StructField("some", StringType, true),
-    new StructField("col", StringType, true),
-    new StructField("names", LongType, false)))
+    StructField("some", StringType, true),
+    StructField("col", StringType, true),
+    StructField("names", LongType, false)))
   val myRows = Seq(Row("Hello", null, 1L), Row("There", "something", 20L))
   val myRDD = spark.sparkContext.parallelize(myRows)
   val myDfFromRows = spark.createDataFrame(myRDD, myManualSchema2) //funnily enough it works also on myManualSchema which is similar
@@ -270,4 +270,56 @@ object BasicStructuredOperations extends App {
     "`This Long Column-Name`",
     "`This Long Column-Name` as `new country origin`") //we need the backticks because we are referencing columns in an expression
     .show(2)
+
+  spark.sql("SELECT dest_COUNTRY_NAME from flightView").show(2)
+  //if we want to set sql to be case sensitive we can do so
+  spark.conf.set("spark.sql.caseSensitive", true)
+  //turns even this call fails when caseSensitive is true
+  spark.conf.set("spark.sql.caseSensitive", false) //so I will turn case sensitive off again
+  spark.sql("SELECT DEST_COUNTRY_NAME from flightView").show(2)
+  //next line should not work because of the setting change
+  spark.sql("SELECT dest_COUNTRY_NAME from flightView").show(2)
+
+  //Removing Columns
+  //Now that we’ve created this column, let’s take a look at how we can remove columns from
+  //DataFrames. You likely already noticed that we can do this by using select. However, there is
+  //also a dedicated method called drop:
+
+  dfWithLongColName.drop("ORIGIN_COUNTRY_NAME", "DEST_COUNTRY_NAME").show(3)
+
+  println(fdf.schema)
+
+  val dfInt = fdf.withColumn("count2", col("count").cast("long"))
+  println(dfInt.schema)
+  dfInt.show(2)
+  //same with sql
+  spark.sql("SELECT *, cast(count as long) AS count2 FROM flightView").show(2)
+
+  fdf.filter(col("count") > 1000).show(5) //first approach will catch more errors earlier
+  fdf.where("count > 1000").show(5)
+  spark.sql("SELECT * FROM flightView WHERE count > 1000").show(5)
+
+  //Instinctually, you might want to put multiple filters into the same expression. Although this is
+  //possible, it is not always useful, because Spark automatically performs all filtering operations at
+  //the same time regardless of the filter ordering. This means that if you want to specify multiple
+  //AND filters, just chain them sequentially and let Spark handle the rest:
+
+  // in Scala we chain
+  fdf
+    .where(col("count") < 2)
+    .where(col("ORIGIN_COUNTRY_NAME") =!= "Croatia")
+    .show(2)
+
+  //in sql we just write our  multiple conditionals
+  spark.sql("SELECT * FROM flightView WHERE count < 2 AND ORIGIN_COUNTRY_NAME != 'Croatia' LIMIT 2").show()
+
+  // in Scala
+  println(fdf.select("ORIGIN_COUNTRY_NAME", "DEST_COUNTRY_NAME").distinct().count())
+  //SQL
+  spark.sql("SELECT COUNT(DISTINCT(ORIGIN_COUNTRY_NAME, DEST_COUNTRY_NAME)) FROM flightView").show() //we can show a single scalar as well
+
+  //// in Scala
+  println(fdf.select("ORIGIN_COUNTRY_NAME").distinct().count())
+  spark.sql("SELECT COUNT(DISTINCT ORIGIN_COUNTRY_NAME) FROM flightView").show(1)
+
 }
