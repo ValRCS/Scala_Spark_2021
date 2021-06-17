@@ -32,9 +32,9 @@ object BasicStructuredOperations extends App {
   //on the type of data that you read in.
 
   val myManualSchema = StructType(Array(
-    StructField("DEST_COUNTRY_NAME", StringType, true),
-    StructField("ORIGIN_COUNTRY_NAME", StringType, true),
-    StructField("count", LongType, false,
+    StructField("DEST_COUNTRY_NAME", StringType, nullable = true),
+    StructField("ORIGIN_COUNTRY_NAME", StringType, nullable = true),
+    StructField("count", LongType, nullable = false,
       Metadata.fromJson("{\"hello\":\"world\"}"))
   ))
 
@@ -51,7 +51,7 @@ object BasicStructuredOperations extends App {
   val properDf = spark
     .read
     .format(source = "json")
-    .option("multiLine", true)
+    .option("multiLine", value = true)
     .option("mode", "PERMISSIVE")
     .json(properFoodPath)
   
@@ -80,7 +80,7 @@ object BasicStructuredOperations extends App {
   df.select($"price",$"name").show()
   df.select("price", "name","model").show()
   df.select($"price"+50,$"name").show() //we can do math using implicit $ for columns
-  val bigPrice = ((df.col("price")+50)*100)
+  val bigPrice = (df.col("price")+50)*100
   val ndf = df.withColumn("bigPrice",bigPrice) //added new column bigPrice
   //we compare two columns and result is asigned to new column
   val priceVsQuantity = (df.col("price") > df.col("quantityKg"))
@@ -273,9 +273,9 @@ object BasicStructuredOperations extends App {
 
   spark.sql("SELECT dest_COUNTRY_NAME from flightView").show(2)
   //if we want to set sql to be case sensitive we can do so
-  spark.conf.set("spark.sql.caseSensitive", true)
+  spark.conf.set("spark.sql.caseSensitive", value = true)
   //turns even this call fails when caseSensitive is true
-  spark.conf.set("spark.sql.caseSensitive", false) //so I will turn case sensitive off again
+  spark.conf.set("spark.sql.caseSensitive", value = false) //so I will turn case sensitive off again
   spark.sql("SELECT DEST_COUNTRY_NAME from flightView").show(2)
   //next line should not work because of the setting change
   spark.sql("SELECT dest_COUNTRY_NAME from flightView").show(2)
@@ -387,5 +387,116 @@ object BasicStructuredOperations extends App {
   ) // || indicates OR
     .show(false)
 
-  //TODO sorting again
+  //
+  // in Scala
+  fdf.sort("count").show(5) //by default Ascending
+  fdf.sort("count", "DEST_COUNTRY_NAME").show(5) //we have a 2nd tiebreak column here, both ascending
+  fdf.orderBy("count", "DEST_COUNTRY_NAME").show(5) //we have a 2nd tiebreak column here, both ascending
+  fdf.orderBy(col("count"), col("DEST_COUNTRY_NAME")).show(5) //again two columns with 2nd being the tiebreak
+
+  //To more explicitly specify sort direction, you need to use the asc and desc functions if operating
+  //on a column. These allow you to specify the order in which a given column should be sorted:
+  //// in Scala
+  import org.apache.spark.sql.functions.{desc, asc}
+  fdf.orderBy(expr("count desc")).show(5)
+  fdf.orderBy(desc("count"), asc("DEST_COUNTRY_NAME")).show(5) //there will not be many tiebreaks
+  //until we get to the end
+  fdf.orderBy(asc("count"), desc("DEST_COUNTRY_NAME")).show(5) //so 1 count flights but starting from Z country
+
+
+  //so how about doing the same with Spark SQL?
+  //-- in SQL
+  //SELECT * FROM dfTable ORDER BY count DESC, DEST_COUNTRY_NAME ASC LIMIT 2
+  spark.sql("SELECT * FROM flightView" +
+    " ORDER BY count DESC" +
+    ", DEST_COUNTRY_NAME ASC " +
+    "LIMIT 5")
+    .show() //limit is already 5 so it will not show 20
+
+  fdf.orderBy(asc("count") //so 1 count
+    , desc("DEST_COUNTRY_NAME")  //2nd tiebreak from Z down country
+    , asc("ORIGIN_COUNTRY_NAME") //3rd tiebreak starting from A and up (of course if country started with 0 it would be first)
+  ).show(5)
+  //same as above just in Spark SQL
+  spark.sql("SELECT * FROM flightView" + //we already created flightView much earlier
+    " ORDER BY count ASC" +
+    ", DEST_COUNTRY_NAME DESC " +
+    ", ORIGIN_COUNTRY_NAME ASC " +
+    "LIMIT 5")
+    .show() //limit is already 5 so it will not show 20
+
+  //An advanced tip is to use asc_nulls_first, desc_nulls_first, asc_nulls_last, or
+  //desc_nulls_last to specify where you would like your null values to appear in an ordered
+  //DataFrame.
+  //you'd have to import them just like we imported asc and desc
+
+  //For optimization purposes, it’s sometimes advisable to sort within each partition before another
+  //set of transformations. You can use the sortWithinPartitions method to do this:
+  // in Scala
+  spark.read.format("json").load("./src/resources/flight-data/json/*-summary.json") //will load all summary files
+    .sortWithinPartitions("count")
+    .show(10)
+
+  spark.read.format("json").load("./src/resources/flight-data/json/*-summary.json") //will load all summary files
+    .sortWithinPartitions(desc("count"))
+    .show(10)
+  //TODO how to extract the year from the file name when reading multiple files
+
+  //all 3 are the same below
+  fdf.limit(10).show() //limit should be more efficient when working with larger datasets
+  fdf.show(10) //this might be slower if we are just actually asking for a lot of data firsthand
+  spark.sql("SELECT * FROM flightView LIMIT 10").show()
+
+  //TESTING whether offset exists in Spark SQL //so there is no OFFSET as of 2021
+  //spark.sql("SELECT * FROM flightView OFFSET 5 LIMIT 10 ").show()
+
+  //what do we do when we want to offest we could take more than we need and then drop
+//  fdf.limit(10+5).take(15).slice(6,15)
+fdf.head(15).slice(5,15).foreach(println) //this is not very good if I have to skip say 1000 or 100k rows or more, because array[T] will be read into memory
+  //TODO how to skip more rows without going into local memory
+
+
+  println(fdf.rdd.getNumPartitions) // should be 5 because we set it by default in our Utilities object
+  //this not going to do anything on a single machine
+  // in Scala
+  fdf.repartition(15)
+  println(fdf.rdd.getNumPartitions) //so nothing happens on a single machine still 1
+
+  //If you know that you’re going to be filtering by a certain column often, it can be worth
+  //repartitioning based on that column:
+  //// in Scala
+  //df.repartition(col("DEST_COUNTRY_NAME"))
+
+  //You can optionally specify the number of partitions you would like, too:
+  //// in Scala
+  //df.repartition(5, col("DEST_COUNTRY_NAME"))
+
+  //Coalesce, on the other hand, will not incur a full shuffle and will try to combine partitions. This
+  //operation will shuffle your data into five partitions based on the destination country name, and
+  //then coalesce them (without a full shuffle):
+  //// in Scala
+  //df.repartition(5, col("DEST_COUNTRY_NAME")).coalesce(2)
+
+  //Collecting Rows to the Driver
+  //we used several different methods
+  //for doing so that are effectively all the same. collect gets all data from the entire DataFrame,
+  //take selects the first N rows, and show prints out a number of rows nicely.
+
+  // in Scala
+  val collectDF = fdf.limit(10)
+  val flightArray = collectDF.take(5) // take works with an Integer count, gives us Array of Rows
+  collectDF.show() // this prints it out nicely
+  collectDF.show(5, truncate = false) //prints full columns in cases they are very wide
+  val collectedData = collectDF.collect() //Returns an array that contains all rows in this Dataset.
+  // Running collect requires moving all the data into the application's driver process,
+  // and doing so on a very large dataset can crash the driver process with OutOfMemoryError.
+
+  //so avoid going into local memory as much as possible when working with larger datasets
+  //of course if it is couple of million rows no problem
+
+//  There’s an additional way of collecting rows to the driver in order to iterate over the entire
+//  dataset. The method toLocalIterator collects partitions to the driver as an iterator. This
+//  method allows you to iterate over the entire dataset partition-by-partition in a serial manner:
+//    collectDF.toLocalIterator()
+
 }
