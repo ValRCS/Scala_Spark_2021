@@ -1,6 +1,6 @@
 package com.github.valrcs.spark
 
-import org.apache.spark.sql.functions.{col, lit}
+import org.apache.spark.sql.functions.{bround, col, corr, expr, lit, monotonically_increasing_id, not, pow, round}
 
 object DifferentDataTypesCh6 extends App {
   val spark = SparkUtil.createSpark("ch6")
@@ -51,9 +51,9 @@ object DifferentDataTypesCh6 extends App {
 
   // in Scala
   val priceFilter = col("UnitPrice") > 600
-  val descripFilter = col("Description").contains("POSTAGE")
+  val descriptionFilter = col("Description").contains("POSTAGE")
   df.where(col("StockCode").isin("DOT"))
-    .where(priceFilter.or(descripFilter)) //so you can keep adding AND filters while OR filters are inside each where
+    .where(priceFilter.or(descriptionFilter)) //so you can keep adding AND filters while OR filters are inside each where
     .show(false)
 
   //so SQL of the above would be
@@ -69,4 +69,92 @@ object DifferentDataTypesCh6 extends App {
   ).show(false)
 
   //TODO more Boolean filtering
+//the isExpensive column is a Boolean column with results of particular comparison
+  df.withColumn("isExpensive", not(col("UnitPrice").leq(3.39))).show(30, truncate = false)
+
+  df.withColumn("isExpensive", not(col("UnitPrice").leq(250)))
+    .filter("isExpensive")
+    .select("Description", "UnitPrice").show(5)
+
+  //same as previous using the expression
+  df.withColumn("isExpensive", expr("NOT UnitPrice <= 250"))
+    .filter("isExpensive")
+    .select("Description", "UnitPrice").show(5)
+
+  //WARNING
+  //One “gotcha” that can come up is if you’re working with null data when creating Boolean expressions.
+  //If there is a null in your data, you’ll need to treat things a bit differently. Here’s how you can ensure
+  //that you perform a null-safe equivalence test:
+  //df.where(col("Description").eqNullSafe("hello")).show()
+
+  //should be same as previous two
+  df.where(col("UnitPrice") > 250).show(5)
+
+  //NUMBERS
+
+  val fabricatedQuantity = pow(col("Quantity") * col("UnitPrice"), 2) + 5 //no calculation will take place here we just define the formula
+  df.select(col("CustomerId"),
+    col("Quantity"),
+    col("UnitPrice"),
+    fabricatedQuantity.alias("realQuantity"))
+    .show(5)
+
+  // in Scala using SQL expressions no view needed
+  df.selectExpr(
+    "CustomerId",
+    "Quantity",
+    "UnitPrice",
+    "UnitPrice * 10",
+    "(POWER((Quantity * UnitPrice), 2.0) + 5) as realQuantity",
+    "ROUND((POWER((Quantity * UnitPrice), 2.0) + 5), 2) as roundQuantity")
+    .show(2)
+
+  //You lear of power from this reference of SQL functions available: https://spark.apache.org/docs/latest/api/sql/index.html#power
+
+  //same idea as above two but using full SQL so we need the temporary view dfTable which we created earlier
+  spark.sql("SELECT customerId, UnitPrice, Quantity, (POWER((Quantity * UnitPrice), 2.0) + 5) " +
+    "as realQuantity FROM dfTable")
+    .show(2)
+
+  df.select(round(col("UnitPrice"), 1).alias("rounded"), col("UnitPrice")).show(5)
+
+  //we are using our dataframe to create a new column of values not related in any way to original data
+  df.select(round(lit("2.49")),round(lit("2.5")), bround(lit("2.5"))).show(2)
+
+  //Another numerical task is to compute the correlation of two columns. For example, we can see
+  //the Pearson correlation coefficient for two columns to see if cheaper things are typically bought
+  //in greater quantities. We can do this through a function as well as through the DataFrame
+  //statistic methods:
+
+  println("Pearson correlation coefficient ")
+  println(df.stat.corr("Quantity", "UnitPrice"))
+  df.select(corr("Quantity", "UnitPrice")).show()
+
+  //well looks like a tiny negative correlation but not significant by itself
+  spark.sql("SELECT corr(Quantity, UnitPrice) FROM dfTable").show() //same as above two calculations
+
+  //Another common task is to compute summary statistics for a column or set of columns. We can
+  //use the describe method to achieve exactly this. This will take all numeric columns and
+  //calculate the count, mean, standard deviation, min, and max. You should use this primarily for
+  //viewing in the console because the schema might change in the future
+
+  df.describe().show()
+
+  //If you need these exact numbers, you can also perform this as an aggregation yourself by
+  //importing the functions and applying them to the columns that you need:
+  //// in Scala
+  //import org.apache.spark.sql.functions.{count, mean, stddev_pop, min, max}
+
+  // in Scala
+  val colName = "UnitPrice"
+  val quantileProbabilities = Array(0.25,0.5,0.75, 0.99) //so 0.5 will be median
+  val relError = 0.05
+  df.stat.approxQuantile("UnitPrice", quantileProbabilities, relError).foreach(println) // 2.51 //with BigData you might not want to do full calculation of quantiles
+
+  //we can add some numbers starting from 0
+  // in Scala
+  df.select(monotonically_increasing_id(),expr("*")).show(5) //expr("*") is like SELECT * FROM mytable
+
+
+
 }
