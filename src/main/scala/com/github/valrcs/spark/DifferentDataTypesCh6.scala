@@ -1,6 +1,6 @@
 package com.github.valrcs.spark
 
-import org.apache.spark.sql.functions.{bround, col, corr, expr, lit, monotonically_increasing_id, not, pow, rand, round}
+import org.apache.spark.sql.functions.{bround, col, corr, expr, initcap, lit, lower, monotonically_increasing_id, not, pow, rand, regexp_replace, round, upper}
 
 object DifferentDataTypesCh6 extends App {
   val spark = SparkUtil.createSpark("ch6")
@@ -159,5 +159,66 @@ object DifferentDataTypesCh6 extends App {
   df.select(monotonically_increasing_id(), rand(), rand(42),expr("*")).show(5)
   //so rand(42) sequence should repeat on 2nd run, while rand() should not
   df.select(monotonically_increasing_id(), rand(), rand(42),expr("*")).show(5)
+
+
+  //Strings
+  //capitalize each word in the column
+  df.select(initcap(col("Description"))).show(5, false)
+  //same as above with spark sql
+  spark.sql("SELECT initcap(Description) FROM dfTable").show(5, false)
+
+  df.select(col("Description"), //original
+    initcap(col("Description")), //capitalize first words
+    lower(col("Description")), //lowercase
+    upper(col("Description"))) //uppercase
+    .show(5)
+
+  //same as above skipping initcap
+  spark.sql("SELECT Description, initcap(Description), lower(Description), upper(Description) FROM dfTable")
+    .show(5, false)
+
+  import org.apache.spark.sql.functions.{lit, ltrim, rtrim, rpad, lpad, trim}
+  df.select(
+    ltrim(lit(" HELLO ")).as("ltrim"),
+    rtrim(lit(" HELLO ")).as("rtrim"),
+    trim(lit(" HELLO ")).as("trim"),
+    lpad(lit("HELLO"), 3, " ").as("lp3"),
+    lpad(lit("HELLO"), 9, "*").as("lp9"), //so we will be adding 4 starts to the left of HELLO
+    rpad(lit("HELLO"), 10, " ").as("rp")).show(3)
+
+  //Regular expressions give
+  //the user an ability to specify a set of rules to use to either extract values from a string or replace
+  //them with some other values.
+
+  val simpleColors = Seq("black", "white", "red", "green", "blue")
+  val regexString = simpleColors.map(_.toUpperCase).mkString("|") // the | signifies `OR` in regular expression syntax
+  //with the above regex building method we can have a sequence of colors and our regex will be made for us automatically
+
+  //so now we select original column and the one with particular colors replaced by generic COLOR
+  df.select(
+    regexp_replace(col("Description"), regexString, "COLOR").alias("color_clean"),
+    col("Description"))
+    .show(10, false)
+
+  val regexMetal = "METAL"
+  df.select(
+    regexp_replace(col("Description"), regexMetal, "Metallica").alias("MetalColumn"),
+    col("Description")
+  ).show(15, false)
+
+  val regexDigit = "\\d" //we need to double escape our backspace once for Scala string and once more for regex
+  df.select(
+    regexp_replace(col("Description"), regexDigit, "Number").alias("MetalColumn"),
+    col("Description")
+  ).show(15, false)
+
+  val regexP = "P" //so each single letter P to be replaced with something else
+  val regexPPlus = "P+" //the idea is to replace one or more capital PPPP with single lowercase p
+
+  df.select(
+    regexp_replace(col("Description"), regexP, "p").alias("PColumn"),
+    regexp_replace(col("Description"), regexPPlus, "p").alias("PlusColumn"),
+    col("Description")
+  ).show(15, false)
 
 }
