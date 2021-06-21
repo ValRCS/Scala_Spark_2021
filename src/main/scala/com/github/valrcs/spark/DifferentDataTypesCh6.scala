@@ -1,6 +1,6 @@
 package com.github.valrcs.spark
 
-import org.apache.spark.sql.functions.{bround, col, corr, expr, lit, monotonically_increasing_id, not, pow, round}
+import org.apache.spark.sql.functions.{bround, col, corr, expr, lit, monotonically_increasing_id, not, pow, rand, round}
 
 object DifferentDataTypesCh6 extends App {
   val spark = SparkUtil.createSpark("ch6")
@@ -155,6 +155,9 @@ object DifferentDataTypesCh6 extends App {
   // in Scala
   df.select(monotonically_increasing_id(),expr("*")).show(5) //expr("*") is like SELECT * FROM mytable
 
-
+  //lets add some random numbers as new column
+  df.select(monotonically_increasing_id(), rand(), rand(42),expr("*")).show(5)
+  //so rand(42) sequence should repeat on 2nd run, while rand() should not
+  df.select(monotonically_increasing_id(), rand(), rand(42),expr("*")).show(5)
 
 }
