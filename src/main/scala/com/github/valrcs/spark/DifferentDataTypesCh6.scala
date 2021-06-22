@@ -1,6 +1,7 @@
 package com.github.valrcs.spark
 
-import org.apache.spark.sql.functions.{bround, col, corr, expr, initcap, lit, lower, monotonically_increasing_id, not, pow, rand, regexp_replace, round, upper}
+//import org.apache.spark.sql.functions._ //this would include all functions from functions but there are too many so not recommended
+import org.apache.spark.sql.functions.{bround, col, corr, expr, initcap, lit, lower, monotonically_increasing_id, not, pow, rand, regexp_extract, regexp_replace, round, translate, upper}
 
 object DifferentDataTypesCh6 extends App {
   val spark = SparkUtil.createSpark("ch6")
@@ -220,5 +221,87 @@ object DifferentDataTypesCh6 extends App {
     regexp_replace(col("Description"), regexPPlus, "p").alias("PlusColumn"),
     col("Description")
   ).show(15, false)
+
+  //Another task might be to replace given characters with other characters. Building this as a
+  //regular expression could be tedious, so Spark also provides the translate function to replace these
+  //values. This is done at the character level and will replace all instances of a character with the
+  //indexed character in the replacement string
+
+  //so simpler and possibly quicker alternative to full regex
+  //so each character from matching string is replaced by corresponding string in replaceString
+  df.select(translate(col("Description"), "LEET", "1337"), col("Description"))
+    .show(5, false)
+
+  //there should be no need for two EEs and two 33s
+  spark.sql("SELECT translate(Description, 'LET', '137'), Description FROM dfTable")
+    .show(5, false)
+
+
+  //extracting matches out of strings
+
+  println(regexString) //so simple multiple match regex | is OR
+  df.select(
+    regexp_extract(col("Description"), regexString, 0).alias("color_clean"),
+    col("Description"))
+    .show(10, false)
+
+  spark.sql("SELECT regexp_extract(Description, '(BLACK|WHITE|RED|GREEN|BLUE)', 0), Description FROM dfTable")
+    .show(10, false)
+
+  //Sometimes, rather than extracting values, we simply want to check for their existence. We can do
+  //this with the contains method on each column. This will return a Boolean declaring whether the
+  //value you specify is in the column’s string
+
+  // in Scala
+  val containsBlack = col("Description").contains("BLACK")
+  val containsWhite = col("DESCRIPTION").contains("WHITE")
+  df.withColumn("hasSimpleColor", containsBlack.or(containsWhite))
+    .where("hasSimpleColor") //so only Rows where the hasSimpleColor evaluates to True
+    .select("Description").show(10, false)
+
+  //same as above
+  spark.sql("SELECT Description FROM dfTable WHERE instr(Description, 'BLACK') >= 1 OR instr(Description, 'WHITE') >= 1")
+    .show(10,false)
+
+  //Let’s work through this in a more rigorous way and take advantage of Spark’s ability to accept a
+  //dynamic number of arguments. When we convert a list of values into a set of arguments and pass
+  //them into a function, we use a language feature called varargs. Using this feature, we can
+  //effectively unravel an array of arbitrary length and pass it as arguments to a function. This,
+  //coupled with select makes it possible for us to create arbitrary numbers of columns
+  //dynamically:
+
+  println(simpleColors.mkString("(", "|", ")"))
+  val selectedColumns = simpleColors.map(color => {
+    col("Description").contains(color.toUpperCase).alias(s"is_$color")
+  }):+expr("*") // could also append this value
+  df.select(selectedColumns:_*).where(col("is_white").or(col("is_red")))
+    .select("Description").show(5, false)
+
+  //https://stackoverflow.com/questions/32551919/how-to-use-column-isin-with-list
+  val exactMatches = Seq("WHITE METAL LANTERN", "HAND WARMER RED POLKA DOT" )
+  df.filter(col("Description").isin(exactMatches:_*)) //exactMatches:_* converst Seq to variable number of arguments
+    .show(10, false)
+
+  //lets extract rows which contain a digit somewhere in description
+
+  println(regexDigit)
+  df.filter(col("Description").rlike(regexDigit))
+    .show(10, false)
+
+  //how about extracting rows which have 2 or more digit numbers in the description
+  df.filter(col("Description").rlike("\\d{2,}"))
+    .show(10, false)
+
+  //this gives us empty rows
+  spark.sql("SELECT * FROM dfTable WHERE Description RLIKE '\\d+'")
+    .show(10, false)
+
+  //this works
+  spark.sql("SELECT * FROM dfTable WHERE Description RLIKE 1")
+    .show(10, false)
+
+//  spark.sql("SELECT * FROM dfTable WHERE Description RLIKE \\d+")
+//    .show(10, false)
+  //TODO find in documentation SQL RLIKE syntax, again we can use rlike with no problems
 
 }
