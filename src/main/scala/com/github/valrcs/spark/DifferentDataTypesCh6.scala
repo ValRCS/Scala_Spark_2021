@@ -1,7 +1,7 @@
 package com.github.valrcs.spark
 
 //import org.apache.spark.sql.functions._ //this would include all functions from functions but there are too many so not recommended
-import org.apache.spark.sql.functions.{bround, col, corr, expr, initcap, lit, lower, monotonically_increasing_id, not, pow, rand, regexp_extract, regexp_replace, round, translate, upper}
+import org.apache.spark.sql.functions.{bround, coalesce, col, corr, current_date, current_timestamp, date_add, date_sub, datediff, expr, initcap, lit, lower, monotonically_increasing_id, months_between, not, pow, rand, regexp_extract, regexp_replace, round, to_date, to_timestamp, translate, upper}
 
 object DifferentDataTypesCh6 extends App {
   val spark = SparkUtil.createSpark("ch6")
@@ -304,4 +304,144 @@ object DifferentDataTypesCh6 extends App {
 //    .show(10, false)
   //TODO find in documentation SQL RLIKE syntax, again we can use rlike with no problems
 
+//As we hinted earlier, working with dates and timestamps closely relates to working with strings
+  //because we often store our timestamps or dates as strings and convert them into date types at
+  //runtime. This is less common when working with databases and structured data but much more
+  //common when we are working with text and CSV files
+
+  //Although Spark will do read dates or times on a best-effort basis. However, sometimes there will
+  //be no getting around working with strangely formatted dates and times. The key to
+  //understanding the transformations that you are going to need to apply is to ensure that you know
+  //exactly what type and format you have at each given step of the way. Another common “gotcha”
+  //is that Spark’s TimestampType class supports only second-level precision, which means that if
+  //you’re going to be working with milliseconds or microseconds, you’ll need to work around this
+  //problem by potentially operating on them as longs. Any more precision when coercing to a
+  //TimestampType will be removed
+
+  //Spark can be a bit particular about what format you have at any given point in time. It’s
+  //important to be explicit when parsing or converting to ensure that there are no issues in doing so.
+  //At the end of the day, Spark is working with Java dates and timestamps and therefore conforms
+  //to those standards.
+
+  val dateDF = spark.range(10)
+    .withColumn("today", current_date())
+    .withColumn("now", current_timestamp())
+  dateDF.createOrReplaceTempView("dateTable")
+
+  dateDF.printSchema()
+  dateDF.show()
+
+//  Now that we have a simple DataFrame to work with, let’s add and subtract five days from today.
+//  These functions take a column and then the number of days to either add or subtract as the
+//    arguments:
+
+  dateDF.select(col("today"),
+    date_sub(col("today"), 5),
+    date_add(col("today"), 5))
+    .show(2, false)
+
+  dateDF.select(col("today"),
+    date_sub(col("today"), 45),
+    date_add(col("today"), 15))
+    .show(2, false)
+
+  //Another common task is to take a look at the difference between two dates. We can do this with
+  //the datediff function that will return the number of days in between two dates. Most often we
+  //just care about the days, and because the number of days varies from month to month, there also
+  //exists a function, months_between, that gives you the number of months between two dates:
+
+  dateDF.withColumn("week_ago", date_sub(col("today"), 7))
+    .select(datediff(col("week_ago"), col("today")),
+      col("week_ago"),
+      col("today"))
+    .show(1, false)
+
+
+  dateDF.select(
+    to_date(lit("2022-01-01")).alias("start"),
+    to_date(lit("2021-06-22")).alias("end"))
+    .select(months_between(col("start"), col("end")),
+      col("start"),
+      col("end"),
+      datediff(col("start"), col("end")))
+        .show(1, false)
+
+  //Spark will not throw an error if it cannot parse the date; rather, it will just return null. This can
+  //be a bit tricky in larger pipelines because you might be expecting your data in one format and
+  //getting it in another.
+
+  spark.range(5).withColumn("date", lit("2021-06-22"))
+    .select(to_date(col("date"))).show(1)
+
+  //so what happens when we have yyyy-DD-MM format
+  //by default we will either get null, or get wrong date, unless of course date and month matches :)
+  dateDF.select(to_date(lit("2016-20-12")),to_date(lit("2017-12-11"))).show(1)
+
+  val dateFormat = "yyyy-dd-MM"
+  val cleanDateDF = spark.range(1).select(
+    to_date(lit("2017-12-11"), dateFormat).alias("date"),
+    to_date(lit("2021-22-06"), dateFormat).alias("date2"))
+  cleanDateDF.createOrReplaceTempView("dateTable2")
+  cleanDateDF.show(false)
+
+  spark.sql("SELECT to_date(date, 'yyyy-dd-MM'), to_date(date2, 'yyyy-dd-MM'), to_date(date) FROM dateTable2")
+    .show(truncate=false)
+
+  //an example of to_timestamp, which always requires a format to be specified:
+
+  cleanDateDF.select(to_timestamp(col("date"), dateFormat)).show()
+
+  val sillyDateTime = "01 12 2038 20:37:19"
+  val sillyFormat = "dd MM yyyy HH:mm:ss"
+  val sillyDateDF = spark
+    .range(2)
+    .withColumn("today", current_date())
+    .withColumn("now", current_timestamp())
+    .withColumn("future", to_timestamp(lit(sillyDateTime), sillyFormat))
+
+  sillyDateDF.printSchema()
+  sillyDateDF.show(2, false)
+
+  //in Spark Working with Nulls in Data
+  //As a best practice, you should always use nulls to represent missing or empty data in your
+  //DataFrames.
+
+  //WARNING
+  //Nulls are a challenging part of all programming, and Spark is no exception. In our opinion, being
+  //explicit is always better than being implicit when handling null values. For instance, in this part of the
+  //book, we saw how we can define columns as having null types. However, this comes with a catch.
+  //When we declare a column as not having a null time, that is not actually enforced. To reiterate, when
+  //you define a schema in which all columns are declared to not have null values, Spark will not enforce
+  //that and will happily let null values into that column. The nullable signal is simply to help Spark SQL
+  //optimize for handling that column. If you have null values in columns that should not have null values,
+  //you can get an incorrect result or see strange exceptions that can be difficult to debug
+
+//  Spark includes a function to allow you to select the first non-null value from a set of columns by
+//    using the coalesce function.
+
+  df.select(coalesce(col("Description"), col("CustomerId"))).show(false)
+
+  //ifnull, nullIf, nvl, and nvl2
+  //There are several other SQL functions that you can use to achieve similar things. ifnull allows
+  //you to select the second value if the first is null, and defaults to the first. Alternatively, you could
+  //use nullif, which returns null if the two values are equal or else returns the second if they are
+  //not. nvl returns the second value if the first is null, but defaults to the first. Finally, nvl2 returns
+  //the second value if the first is not null; otherwise, it will return the last specified value
+  //(else_value in the following example)
+
+  spark.sql("SELECT ifnull(null, 'return_value'), " +
+    "nullif('value', 'value'), nvl(null, 'return_value'), " +
+    "nvl2('not_null', 'return_value', 'else_value') " +
+    "FROM dfTable LIMIT 1")
+    .show(false)
+
+//  The simplest function is drop, which removes rows that contain nulls. The default is to drop any
+//    row in which any value is null:
+  df.na.drop().show(25, false)
+
+//  We can also apply this to certain sets of columns by passing in an array of columns:
+    // in Scala
+    df.na.drop("all", Seq("StockCode", "InvoiceNo"))
+
+  //TODO test our drop and fill
 }

@@ -38,4 +38,6 @@ object ExerciseJ22 extends App {
     .where("CatOrDog")
     .orderBy(desc("TotalPurchase"))
     .show(20, false)
+
+  df.printSchema()
 }
