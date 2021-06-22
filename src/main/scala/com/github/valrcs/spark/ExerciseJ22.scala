@@ -1,5 +1,7 @@
 package com.github.valrcs.spark
 
+import org.apache.spark.sql.functions.{col, desc, round}
+
 object ExerciseJ22 extends App {
   println("Let's analyze some data for June 22st - 2011")
   val filePath = "./src/resources/retail-data/by-day/2011-06-22.csv"
@@ -19,4 +21,21 @@ object ExerciseJ22 extends App {
 //TODO add column with total purchase price (Quantity * UnitPrice) call the new column TotalPurchase
   //TODO order by this TotalPurchase column
   //TODO show top 20
+
+  val containsCat = col("Description").contains("CAT")
+  val containsDog= col("DESCRIPTION").contains("DOG")
+  df.withColumn("hasAnimal", containsCat.or(containsDog))
+    .where("hasAnimal")
+    .withColumn("TotalPurchase", round(col("Quantity") * col("UnitPrice"), 2))
+    .select("Description", "Quantity", "UnitPrice", "TotalPurchase")
+    .where(col("Quantity") > 0) //exclude neg quantity
+    .orderBy(col("TotalPurchase").desc)
+    .show(20, false)
+
+
+  df.withColumn("CatOrDog", containsCat.or(containsDog))
+    .withColumn("TotalPurchase", round(col("Quantity") * col("UnitPrice")*100/100))
+    .where("CatOrDog")
+    .orderBy(desc("TotalPurchase"))
+    .show(20, false)
 }
