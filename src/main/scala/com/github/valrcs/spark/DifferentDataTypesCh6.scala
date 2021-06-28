@@ -443,5 +443,6 @@ object DifferentDataTypesCh6 extends App {
     // in Scala
     df.na.drop("all", Seq("StockCode", "InvoiceNo"))
 
-  //TODO test our drop and fill
+  df.describe().show(false) //so our full dataset description
+  df.na.drop().describe().show(false) //so our cleaned dataset
 }
