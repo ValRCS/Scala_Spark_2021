@@ -1,6 +1,7 @@
 package com.github.valrcs.spark
 
-import org.apache.spark.sql.functions.{col, struct, split}
+import org.apache.spark.sql.functions
+import org.apache.spark.sql.functions.{array_contains, col, explode, split, struct}
 
 object Ch6ComplexTypes extends App {
   val spark = SparkUtil.createSpark("ch6")
@@ -50,5 +51,44 @@ object Ch6ComplexTypes extends App {
   df.select(split(col("Description"), " ").alias("array_col"))
     .selectExpr("array_col[1]").show(5) //so 2nd word of every split
 
+  df
+    .withColumn("splitDesc",split(col("Description"), " "))
+    .withColumn("wordCount", functions.size(col("splitDesc"))) //size is also used by Scala so we have to add a functions prefix
+    .show(5,false)
 
+  df
+    .withColumn("splitDesc",split(col("Description"), " "))
+    .withColumn("wordCount", functions.size(col("splitDesc"))) //size is also used by Scala so we have to add a functions prefix
+    .withColumn("has White", array_contains(col("splitDesc"), "WHITE"))
+    .show(5,false)
+
+
+  //explode
+  //The explode function takes a column that consists of arrays and creates one row (with the rest of
+  //the values duplicated) per value in the array.
+
+  df.withColumn("splitted", split(col("Description"), " "))
+    .withColumn("exploded", explode(col("splitted")))
+//    .select("Description", "InvoiceNo", "exploded") //lets show all
+    .show(25, false)
+
+  spark.sql("-- in SQL\nSELECT Description, InvoiceNo, exploded\n" +
+    "FROM (SELECT *, split(Description, \" \") as splitted " +
+    "FROM dfTable)\n" +
+    "LATERAL VIEW explode(splitted) as exploded")
+    .show(5, false)
+
+  //Maps
+  //Maps are created by using the map function and key-value pairs of columns. You then can select
+  //them just like you might select from an array:
+
+  df.select(functions.map(col("Description"), col("InvoiceNo"))
+    .alias("complex_map"))
+    .show(5, false) //again map needs prefix to avoid name collission
+
+  //You can query them by using the proper key. A missing key returns null
+
+  // in Scala
+  df.select(functions.map(col("Description"), col("InvoiceNo")).alias("complex_map"))
+    .selectExpr("complex_map['WHITE METAL LANTERN']").show(5)
 }
