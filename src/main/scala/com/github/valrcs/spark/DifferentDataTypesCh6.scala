@@ -445,4 +445,9 @@ object DifferentDataTypesCh6 extends App {
 
   df.describe().show(false) //so our full dataset description
   df.na.drop().describe().show(false) //so our cleaned dataset
+
+  //Ordering
+  //As we discussed in Chapter 5, you can use asc_nulls_first, desc_nulls_first,
+  //asc_nulls_last, or desc_nulls_last to specify where you would like your null values to
+  //appear in an ordered DataFrame.
 }
