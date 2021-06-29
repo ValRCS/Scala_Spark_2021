@@ -117,5 +117,28 @@ object Ch6JSON extends App {
 
   //TODO save in CSV or JSON
 
-  //TODO UDF - user defined functions
+  val combinedDF =   df.filter(col("UnitPrice") > 20)
+    .sort(desc("UnitPrice"))
+    .select(expr("(InvoiceDate, Quantity, UnitPrice, InvoiceNo, Description) as combinedCols"))
+    .select(to_json(col("combinedCols")))
+
+  combinedDF.show(10, false)
+
+  combinedDF.write
+    .format("csv")
+    .option("path","./src/resources/j29")
+    .save()
+
+  combinedDF.coalesce(1) //for larger data sets without coalesce Spark will divide your data in partitions
+    .write
+    .format("csv")
+    .option("path","./src/resources/csv/j29")
+    .save()
+
+  combinedDF.coalesce(1)
+    .write
+    .format("json")
+    .option("path","./src/resources/json/j29")
+    .save()
+
 }
