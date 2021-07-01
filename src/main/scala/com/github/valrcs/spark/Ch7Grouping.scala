@@ -1,7 +1,8 @@
 package com.github.valrcs.spark
 
+import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions
-import org.apache.spark.sql.functions.{desc, expr}
+import org.apache.spark.sql.functions.{col, dense_rank, desc, expr, to_date}
 
 object Ch7Grouping extends App {
   val spark = SparkUtil.createSpark("ch7")
@@ -94,4 +95,103 @@ object Ch7Grouping extends App {
     expr("avg(UnitPrice) avgUPrice"))
     .show()
 
+  //Window Functions
+  //You can also use window functions to carry out some unique aggregations by either computing
+  //some aggregation on a specific “window” of data, which you define by using a reference to the
+  //current data. This window specification determines which rows will be passed in to this function
+
+
+  //To demonstrate, we will add a date column that will convert our invoice date into a column that
+  //contains only date information (not time information, too):
+
+  val dfWithDate = df.withColumn("date", to_date(col("InvoiceDate"),
+    "M/d/yyyy H:mm")) //without frm to_date would not know how to parse InvoiceDate //book had wrong fmt!!
+  dfWithDate.createOrReplaceTempView("dfWithDate")
+
+  dfWithDate.printSchema()
+  dfWithDate.show(3, false)
+
+  //The first step to a window function is to create a window specification. Note that the partition
+  //by is unrelated to the partitioning scheme concept that we have covered thus far. It’s just a
+  //similar concept that describes how we will be breaking up our group. The ordering determines
+  //the ordering within a given partition, and, finally, the frame specification (the rowsBetween
+  //statement) states which rows will be included in the frame based on its reference to the current
+  //input row.
+  //
+  // In the following example, we look at all previous rows up to the current row:
+  val windowSpec = Window
+    .partitionBy("CustomerId", "date")
+    .orderBy(col("Quantity").desc)
+    .rowsBetween(Window.unboundedPreceding, Window.currentRow)
+
+  //Now we want to use an aggregation function to learn more about each specific customer. An
+  //example might be establishing the maximum purchase quantity over all time. To answer this, we
+  //use the same aggregation functions that we saw earlier by passing a column name or expression.
+  //In addition, we indicate the window specification that defines to which frames of data this
+  //function will apply:
+
+  val maxPurchaseQuantity = functions.max(col("Quantity")).over(windowSpec)
+
+
+  //You will notice that this returns a column (or expressions). We can now use this in a DataFrame
+  //select statement. Before doing so, though, we will create the purchase quantity rank. To do that
+  //we use the dense_rank function to determine which date had the maximum purchase quantity
+  //for every customer. We use dense_rank as opposed to rank to avoid gaps in the ranking
+  //sequence when there are tied values (or in our case, duplicate rows):
+
+  val purchaseDenseRank = dense_rank().over(windowSpec)
+  val purchaseRank = functions.rank().over(windowSpec)
+
+  dfWithDate
+    .where("CustomerId IS NOT NULL") //Null customers would wreck havoc on ranking functions
+    .orderBy("CustomerId")
+    .select(
+      col("CustomerId"),
+      col("InvoiceNo"),
+      col("date"),
+      col("Quantity"),
+      purchaseRank.alias("quantityRank"),
+      purchaseDenseRank.alias("quantityDenseRank"),
+      maxPurchaseQuantity.alias("maxPurchaseQuantity"))
+    .show(35, false)
+
+  //sql "one liner"
+    spark.sql("""SELECT CustomerId, date, Quantity,
+                |rank(Quantity) OVER (PARTITION BY CustomerId, date
+                |ORDER BY Quantity DESC NULLS LAST
+                |ROWS BETWEEN
+                |UNBOUNDED PRECEDING AND
+                |CURRENT ROW) as rank,
+                |dense_rank(Quantity) OVER (PARTITION BY CustomerId, date
+                |ORDER BY Quantity DESC NULLS LAST
+                |ROWS BETWEEN
+                |UNBOUNDED PRECEDING AND
+                |CURRENT ROW) as dRank,
+                |max(Quantity) OVER (PARTITION BY CustomerId, date
+                |ORDER BY Quantity DESC NULLS LAST
+                |ROWS BETWEEN
+                |UNBOUNDED PRECEDING AND
+                |CURRENT ROW) as maxPurchase
+                |FROM dfWithDate WHERE CustomerId IS NOT NULL ORDER BY CustomerId""".stripMargin)
+      .show(35,false)
+
+  //Top 10 sales overall
+  df
+    .withColumn("Total", col("Quantity")*col("UnitPrice"))
+    .orderBy(desc("Total"))
+    .show(10,false)
+
+  //now we should create a ranking and specify a window
+  val countrySpec = Window
+    .partitionBy("Country")
+    .orderBy(col("Total").desc)
+    .rowsBetween(Window.unboundedPreceding, Window.currentRow) //we will see how Spark optimizes because ranking 500k items could take a while
+
+  val countryPurchaseDenseRank = dense_rank().over(countrySpec) //so we start with Austria
+
+  df
+    .withColumn("Total", col("Quantity")*col("UnitPrice"))
+    .orderBy(desc("Total"))
+    .withColumn("CountryRank", countryPurchaseDenseRank)
+    .show(15,false)
 }
