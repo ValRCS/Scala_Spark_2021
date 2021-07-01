@@ -1,7 +1,7 @@
 package com.github.valrcs.spark
 
 import org.apache.spark.sql.functions
-import org.apache.spark.sql.functions.{approx_count_distinct, avg, countDistinct, expr, first, last, max, min, stddev_pop, stddev_samp, sum, sumDistinct, var_pop, var_samp}
+import org.apache.spark.sql.functions.{approx_count_distinct, avg, corr, countDistinct, covar_pop, covar_samp, expr, first, kurtosis, last, max, min, skewness, stddev_pop, stddev_samp, sum, sumDistinct, var_pop, var_samp}
 
 object Ch7Aggregation extends App {
   println("Aggregating is the act of collecting something together and is a cornerstone of big data analytics")
@@ -111,8 +111,43 @@ object Ch7Aggregation extends App {
   df.select(var_pop("Quantity"), var_samp("Quantity"),
     stddev_pop("Quantity"), stddev_samp("Quantity")).show()
 
-  //TODO more stats functions
+  //skewness and kurtosis
+  //Skewness and kurtosis are both measurements of extreme points in your data. Skewness
+  //measures the asymmetry of the values in your data around the mean, whereas kurtosis is a
+  //measure of the tail of data. These are both relevant specifically when modeling your data as a
+  //probability distribution of a random variable.
+  //https://en.wikipedia.org/wiki/Skewness
+  //https://en.wikipedia.org/wiki/Kurtosis
 
-  //TODO Grouping functions
+  df.select(skewness("Quantity"), kurtosis("Quantity")).show()
+  df.selectExpr("skewness(Quantity)","kurtosis(Quantity)").show()
+  spark.sql("SELECT skewness(Quantity), kurtosis(Quantity) FROM dfTable").show()
+
+  //Covariance and Correlation
+  //We discussed single column aggregations, but some functions compare the interactions of the
+  //values in two difference columns together. Two of these functions are cov and corr, for
+  //covariance and correlation, respectively. Correlation measures the Pearson correlation
+  //coefficient, which is scaled between –1 and +1. The covariance is scaled according to the inputs
+  //in the data.
+  //Like the var function, covariance can be calculated either as the sample covariance or the
+  //population covariance. Therefore it can be important to specify which formula you want to use.
+  //Correlation has no notion of this and therefore does not have calculations for population or
+  //sample.
+
+  //https://en.wikipedia.org/wiki/Correlation_and_dependence
+
+  df.select(corr("InvoiceNo", "Quantity"), covar_samp("InvoiceNo", "Quantity"),
+    covar_pop("InvoiceNo", "Quantity")).show()
+  spark.sql("SELECT corr(InvoiceNo, Quantity)," +
+    " covar_samp(InvoiceNo, Quantity)," +
+    " covar_pop(InvoiceNo, Quantity)" +
+    " FROM dfTable")
+    .show()
+
+  //so we want to find out whether people buy more or less when the unitprice raises
+  df.select(corr("UnitPrice", "Quantity")).show()
+  //so looks like there is no statistically significant correlation between UnitPrice and Quantity
+
+
 
 }
