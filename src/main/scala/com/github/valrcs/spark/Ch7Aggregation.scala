@@ -1,7 +1,7 @@
 package com.github.valrcs.spark
 
 import org.apache.spark.sql.functions
-import org.apache.spark.sql.functions.{approx_count_distinct, avg, corr, countDistinct, covar_pop, covar_samp, expr, first, kurtosis, last, max, min, skewness, stddev_pop, stddev_samp, sum, sumDistinct, var_pop, var_samp}
+import org.apache.spark.sql.functions.{approx_count_distinct, avg, collect_list, collect_set, corr, countDistinct, covar_pop, covar_samp, expr, first, kurtosis, last, max, min, skewness, stddev_pop, stddev_samp, sum, sumDistinct, var_pop, var_samp}
 
 object Ch7Aggregation extends App {
   println("Aggregating is the act of collecting something together and is a cornerstone of big data analytics")
@@ -149,5 +149,14 @@ object Ch7Aggregation extends App {
   //so looks like there is no statistically significant correlation between UnitPrice and Quantity
 
 
+  //Aggregating to Complex Types
+  //In Spark, you can perform aggregations not just of numerical values using formulas, you can also
+  //perform them on complex types. For example, we can collect a list of values present in a given
+  //column or only the unique values by collecting to a set.
+  //You can use this to carry out some more programmatic access later on in the pipeline or pass the
+  //entire collection in a user-defined function (UDF):
+
+  df.agg(collect_set("Country"), collect_list("Country")).show()
+  spark.sql("SELECT collect_set(Country), collect_list(Country) FROM dfTable").show()
 
 }
