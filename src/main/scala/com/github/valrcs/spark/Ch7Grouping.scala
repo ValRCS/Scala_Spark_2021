@@ -225,4 +225,40 @@ object Ch7Grouping extends App {
 
 //    .withColumn("CountryCumulativeDistribution", countryCumDist)
     .show(25,false)
+
+  //Grouping sets more complex grouping
+  //sometimes we want something a bit
+  //more complete—an aggregation across multiple groups. We achieve this by using grouping sets.
+  //Grouping sets are a low-level tool for combining sets of aggregations together. They give you the
+  //ability to create arbitrary aggregation in their group-by statements
+
+  val dfNoNull = dfWithDate.drop() //sometimes you might want to replace the null values with something
+  dfNoNull.createOrReplaceTempView("dfNoNull")
+
+  spark.sql("""SELECT CustomerId, stockCode, sum(Quantity) FROM dfNoNull
+              |GROUP BY customerId, stockCode
+              |ORDER BY CustomerId DESC, stockCode DESC""".stripMargin)
+    .show(5,false)
+
+  spark.sql(
+    """SELECT CustomerId, stockCode, sum(Quantity) FROM dfNoNull
+      |GROUP BY customerId, stockCode GROUPING SETS((customerId, stockCode))
+      |ORDER BY CustomerId DESC, stockCode DESC""".stripMargin)
+    .show(5, false)
+
+  //Simple enough, but what if you also want to include the total number of items, regardless of
+  //customer or stock code? With a conventional group-by statement, this would be impossible. But,
+  //it’s simple with grouping sets: we simply specify that we would like to aggregate at that level, as
+  //well, in our grouping set. This is, effectively, the union of several different groupings together
+
+  spark.sql("""SELECT CustomerId, stockCode, sum(Quantity) FROM dfNoNull
+              |GROUP BY customerId, stockCode GROUPING SETS((customerId, stockCode),())
+              |ORDER BY CustomerId DESC, stockCode DESC""".stripMargin)
+    .show(5, false)
+
+  //TODO examples of where grouping sets would be useful
+
+  //Rollups
+
+
 }
