@@ -2,7 +2,7 @@ package com.github.valrcs.spark
 
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions
-import org.apache.spark.sql.functions.{col, dense_rank, desc, expr, to_date}
+import org.apache.spark.sql.functions.{col, cume_dist, dense_rank, desc, expr, lead, ntile, percent_rank, to_date}
 
 object Ch7Grouping extends App {
   val spark = SparkUtil.createSpark("ch7")
@@ -177,7 +177,7 @@ object Ch7Grouping extends App {
 
   //Top 10 sales overall
   df
-    .withColumn("Total", col("Quantity")*col("UnitPrice"))
+    .withColumn("Total", functions.round(col("Quantity")*col("UnitPrice"),2))
     .orderBy(desc("Total"))
     .show(10,false)
 
@@ -187,11 +187,35 @@ object Ch7Grouping extends App {
     .orderBy(col("Total").desc)
     .rowsBetween(Window.unboundedPreceding, Window.currentRow) //we will see how Spark optimizes because ranking 500k items could take a while
 
+  val reverseCountrySpec = Window
+    .partitionBy("Country")
+    .orderBy(col("Total").asc) //asc is the default
+    .rowsBetween(Window.unboundedPreceding, Window.currentRow)
+
+  val simpleCountrySpec = Window
+    .partitionBy("Country")
+    .orderBy(desc("Total"))
+
   val countryPurchaseDenseRank = dense_rank().over(countrySpec) //so we start with Austria
+  val countryPurchaseRank = functions.rank().over(countrySpec) //so we start with Austria
+  val countryPercentageRank = percent_rank().over(countrySpec) //percentage_rank is actually in range 0 to 1 so *100 for actual percentage
+  val countryReversePercentageRank = percent_rank().over(reverseCountrySpec)
+  val countryNtile = ntile(40).over(countrySpec) //maybe better to use ntile as needed because here we have fixed the number of buckets to 40
+  val countryCumDist = cume_dist().over(simpleCountrySpec) //so needed simple spec for cumulative distribution
+  val leadCountry = lead("Total", 3).over(simpleCountrySpec) //so we are looking at the value of total 2 rows ahead
+  //we will get null here when we reach the last 3 rows of current grouping/partition in this case country
+  //TODO lag values after break
 
   df
-    .withColumn("Total", col("Quantity")*col("UnitPrice"))
+    .withColumn("Total", functions.round(col("Quantity")*col("UnitPrice"),2))
     .orderBy(desc("Total"))
-    .withColumn("CountryRank", countryPurchaseDenseRank)
-    .show(15,false)
+    .withColumn("CountryDenseRank", countryPurchaseDenseRank)
+    .withColumn("CountryRank", countryPurchaseRank)
+    .withColumn("revPercRank", countryReversePercentageRank)
+    .withColumn("percRank", countryPercentageRank) //last spec wins the ordering
+    .withColumn("ntile40", countryNtile)
+    .withColumn("cumDistribution", countryCumDist)
+    .withColumn("lead3", leadCountry)
+//    .withColumn("CountryCumulativeDistribution", countryCumDist)
+    .show(25,false)
 }
