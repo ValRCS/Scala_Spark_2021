@@ -2,15 +2,19 @@ package com.github.valrcs.spark
 
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions
-import org.apache.spark.sql.functions.{col, cume_dist, dense_rank, desc, expr, lag, lead, ntile, percent_rank, to_date}
+import org.apache.spark.sql.functions.{col, cume_dist, dense_rank, desc, expr, lag, lead, ntile, percent_rank, row_number, to_date}
 
 object Ch7Grouping extends App {
   val spark = SparkUtil.createSpark("ch7")
   // in Scala
+//  val filePath = "./src/resources/retail-data/all/*.csv"
+  val filePath = "./src/resources/retail-data/by-day/2011-07-03.csv"
+  //src/resources/retail-data/by-day/2011-07-03.csv
+
   val df = spark.read.format("csv")
     .option("header", "true")
     .option("inferSchema", "true")
-    .load("./src/resources/retail-data/all/*.csv")
+    .load(filePath)
     .coalesce(5)
   df.cache() //caching frequent accesses for performance at a cost of using more memory
   df.createOrReplaceTempView("dfTable")
@@ -211,12 +215,14 @@ object Ch7Grouping extends App {
     .orderBy(desc("Total"))
     .withColumn("CountryDenseRank", countryPurchaseDenseRank)
     .withColumn("CountryRank", countryPurchaseRank)
+    .withColumn("countryRow", row_number.over(simpleCountrySpec))
     .withColumn("revPercRank", countryReversePercentageRank)
     .withColumn("percRank", countryPercentageRank) //last spec wins the ordering
     .withColumn("ntile40", countryNtile)
     .withColumn("cumDistribution", countryCumDist)
     .withColumn("lead3", leadCountry)
     .withColumn("lag4", lagCountry)
+
 //    .withColumn("CountryCumulativeDistribution", countryCumDist)
     .show(25,false)
 }
