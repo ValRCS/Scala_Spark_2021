@@ -2,7 +2,7 @@ package com.github.valrcs.spark
 
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions
-import org.apache.spark.sql.functions.{col, cume_dist, dense_rank, desc, expr, lead, ntile, percent_rank, to_date}
+import org.apache.spark.sql.functions.{col, cume_dist, dense_rank, desc, expr, lag, lead, ntile, percent_rank, to_date}
 
 object Ch7Grouping extends App {
   val spark = SparkUtil.createSpark("ch7")
@@ -204,7 +204,7 @@ object Ch7Grouping extends App {
   val countryCumDist = cume_dist().over(simpleCountrySpec) //so needed simple spec for cumulative distribution
   val leadCountry = lead("Total", 3).over(simpleCountrySpec) //so we are looking at the value of total 2 rows ahead
   //we will get null here when we reach the last 3 rows of current grouping/partition in this case country
-  //TODO lag values after break
+  val lagCountry = lag("Total", 4).over(simpleCountrySpec)
 
   df
     .withColumn("Total", functions.round(col("Quantity")*col("UnitPrice"),2))
@@ -216,6 +216,7 @@ object Ch7Grouping extends App {
     .withColumn("ntile40", countryNtile)
     .withColumn("cumDistribution", countryCumDist)
     .withColumn("lead3", leadCountry)
+    .withColumn("lag4", lagCountry)
 //    .withColumn("CountryCumulativeDistribution", countryCumDist)
     .show(25,false)
 }
