@@ -1,5 +1,5 @@
 package com.github.valrcs.spark
-import org.apache.spark.sql.functions.{col, column}
+import org.apache.spark.sql.functions.{col, column, expr}
 
 object Ch8Joins extends App {
     //Join Types
@@ -142,8 +142,83 @@ object Ch8Joins extends App {
   joinType = "left_semi"
   graduateProgram.join(person, joinExpression, joinType).show(false)
 
+  // in Scala
+  val gradProgram2 = graduateProgram.union(Seq(
+    (0, "Masters", "Duplicated Row", "Duplicated School")).toDF())
+  gradProgram2.createOrReplaceTempView("gradProgram2")
 
+  //so if there are multiple matches on the id, then all of those rows will be shown
+  spark.sql("""SELECT * FROM gradProgram2
+              |LEFT SEMI JOIN person
+              |ON gradProgram2.id = person.graduate_program""".stripMargin)
+    .show(false)
 
-  //TODO let's join all 3 tables together! we start with person we have graduate_program which we just did
+  //Left Anti Joins
+  //Left anti joins are the opposite of left semi joins. Like left semi joins, they do not actually
+  //include any values from the right DataFrame. They only compare values to see if the value exists
+  //in the second DataFrame. However, rather than keeping the values that exist in the second
+  //DataFrame, they keep only the values that do not have a corresponding key in the second
+  //DataFrame. Think of anti joins as a NOT IN SQL-style filter:
+  joinType = "left_anti" //so we will see those rows from the left table which did not have a join
+
+  graduateProgram.join(person, joinExpression, joinType).show(false)
+  //same in SQL
+  spark.sql("""SELECT * FROM graduateProgram
+              |LEFT ANTI JOIN person
+              |ON graduateProgram.id = person.graduate_program""".stripMargin)
+    .show(false)
+
+  //WARNING
+  //There exists a Natural join which is handy if you have same column names in different tables
+  //otherwise avoid since it will join on the wrong columns!!!
+  //Implicit is always dangerous! The following query will give us incorrect results because the two
+  //DataFrames/tables share a column name (id), but it means different things in the datasets. You should
+  //always use this join with caution
+  spark.sql("""SELECT * FROM graduateProgram NATURAL JOIN person""")
+    .show(false) //so this will be nonsense join because it will join on ids
+
+  //finally there is a Cartesean join meaning it will match everything without checking any match condition so lots of rows
+  //so if you have 2 1000 row tables you will get 1 million row Carteasean join table
+  //Cross (Cartesian) Joins
+  //The last of our joins are cross-joins or cartesian products. Cross-joins in simplest terms are inner
+  //joins that do not specify a predicate. Cross joins will join every single row in the left DataFrame
+  //to ever single row in the right DataFrame. This will cause an absolute explosion in the number of
+  //rows contained in the resulting DataFrame. If you have 1,000 rows in each DataFrame, the cross-
+  //join of these will result in 1,000,000 (1,000 x 1,000) rows. For this reason, you must very
+  //explicitly state that you want a cross-join by using the cross join keyword
+
+  joinType = "cross"
+  graduateProgram.join(person, joinExpression, joinType).show(false) //so 5 persons * 5 school programs = 25
+
+  spark.sql("""SELECT * FROM graduateProgram
+              |CROSS JOIN person
+              |ON graduateProgram.id = person.graduate_program""".stripMargin)
+    .show(false)
+  //so SPARK protected us from our crazyness, we have to explicitly call out that we want a cross join
+
+  person.crossJoin(graduateProgram).show(25,false) //so now we get our 25 rows
+
+  spark.sql("""SELECT * FROM graduateProgram CROSS JOIN person""").show(25, false)
+
+  //Joins on Complex Types
+  //Even though this might seem like a challenge, it’s actually not. Any expression is a valid join
+  //expression, assuming that it returns a Boolean:
+
+  person
+    .withColumnRenamed("id", "personId")
+    .join(sparkStatus, expr("array_contains(spark_status, id)"))
+    .show(false)
+
+  spark.sql("""SELECT * FROM
+              |(select id as personId, name, graduate_program, spark_status FROM person)
+              |INNER JOIN sparkStatus ON array_contains(spark_status, id)""".stripMargin)
+    .show(false)
+
+  joinType = "inner"
+  person
+    .withColumnRenamed("id", "personId")
+    .join(sparkStatus, expr("array_contains(spark_status, id)"))
+    .join(graduateProgram, joinExpression, joinType)
+    .show(false)
   //also we have spark status
 }
