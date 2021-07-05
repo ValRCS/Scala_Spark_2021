@@ -221,4 +221,77 @@ object Ch8Joins extends App {
     .join(graduateProgram, joinExpression, joinType)
     .show(false)
   //also we have spark status
+
+  //Handling Duplicate Column Names
+  //One of the tricky things that come up in joins is dealing with duplicate column names in your
+  //results DataFrame. In a DataFrame, each column has a unique ID within Spark’s SQL Engine,
+  //Catalyst. This unique ID is purely internal and not something that you can directly reference.
+  //This makes it quite difficult to refer to a specific column when you have a DataFrame with
+  //duplicate column names.
+  //This can occur in two distinct situations:
+  //The join expression that you specify does not remove one key from one of the input
+  //DataFrames and the keys have the same column name
+  //Two columns on which you are not performing the join have the same name
+
+  val gradProgramDupe = graduateProgram.withColumnRenamed("id", "graduate_program")
+  val joinExpr = gradProgramDupe.col("graduate_program") === person.col(
+    "graduate_program")
+
+  person.join(gradProgramDupe, joinExpr).show(false)
+
+  //this join will fail because of ambiguity
+//  person.join(gradProgramDupe, joinExpr).select("graduate_program").show(false)
+
+  //Approach 1: Different join expression
+  //When you have two keys that have the same name, probably the easiest fix is to change the join
+  //expression from a Boolean expression to a string or sequence. This automatically removes one of
+  //the columns for you during the join:
+
+  person.join(gradProgramDupe,"graduate_program").show(false)
+  person.join(gradProgramDupe,"graduate_program").select("graduate_program").show()
+
+//  Approach 2: Dropping the column after the join
+//    Another approach is to drop the offending column after the join. When doing this, we need to
+//  refer to the column via the original source DataFrame. We can do this if the join uses the same
+//  key names or if the source DataFrames have columns that simply have the same name
+  person.join(gradProgramDupe, joinExpr).drop(person.col("graduate_program"))
+    .select("graduate_program").show()
+  val joinExpr2 = person.col("graduate_program") === graduateProgram.col("id")
+  person.join(graduateProgram, joinExpr2).drop(graduateProgram.col("id")).show()
+
+  //Approach 3: Renaming a column before the join
+  //We can avoid this issue altogether if we rename one of our columns before the join:
+  val gradProgram3 = graduateProgram.withColumnRenamed("id", "grad_id")
+  val joinExpr3 = person.col("graduate_program") === gradProgram3.col("grad_id")
+  person.join(gradProgram3, joinExpr3).show()
+
+  //small table to big table via broadcast (instead of shuffle join)
+  //At the beginning of this join will be a large communication, just like in the previous type of join.
+  //However, immediately after that first, there will be no further communication between nodes.
+  //This means that joins will be performed on every single node individually, making CPU the
+  //biggest bottleneck. For our current set of data, we can see that Spark has automatically set this up
+  //as a broadcast join by looking at the explain plan:
+
+  val joinExpr4 = person.col("graduate_program") === graduateProgram.col("id")
+  person.join(graduateProgram, joinExpr4).explain()
+
+  //With the DataFrame API, we can also explicitly give the optimizer a hint that we would like to
+  //use a broadcast join by using the correct function around the small DataFrame in question. In this
+  //example, these result in the same plan we just saw; however, this is not always the case:
+  //import org.apache.spark.sql.functions.broadcast
+  //val joinExpr = person.col("graduate_program") === graduateProgram.col("id")
+  //person.join(broadcast(graduateProgram), joinExpr).explain()
+  //The SQL interface also includes the ability to provide hints to perform joins. These are not
+  //enforced, however, so the optimizer might choose to ignore them. You can set one of these hints
+  //by using a special comment syntax. MAPJOIN, BROADCAST, and BROADCASTJOIN all do the same
+  //thing and are all supported:
+  //-- in SQL
+  //SELECT /*+ MAPJOIN(graduateProgram) */ * FROM person JOIN graduateProgram
+  //ON person.graduate_program = graduateProgram.id
+  //This doesn’t come for free either: if you try to broadcast something too large, you can crash your
+  //driver node (because that collect is expensive). This is likely an area for optimization in the
+  //future.
+  //Little table–to–little table
+  //When performing joins with small tables, it’s usually best to let Spark decide how to join them.
+  //You can always force a broadcast join if you’re noticing strange behavior.
 }
