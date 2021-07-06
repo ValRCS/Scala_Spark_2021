@@ -1,5 +1,7 @@
 package com.github.valrcs.spark
 
+import org.apache.spark.sql.types.{IntegerType, LongType, Metadata, StringType, StructField, StructType}
+
 object Ch9DataSources extends App {
   val spark = SparkUtil.createSpark("ch9DataSources")
 
@@ -80,6 +82,104 @@ object Ch9DataSources extends App {
     .save
 
   //TODO specify Schema if needed
+  // in Scala
+  //Id,Name,Car,Year
+  val myManualSchema = new StructType(Array(
+    StructField("Id", IntegerType, true),
+    StructField("Name", StringType, true),
+    StructField("Car", StringType, true),
+    StructField("Year", IntegerType, true),
+    ))
 
-  //TODO load SQL database
+  val manualCSV = spark
+    .read
+    .format("csv")
+    .option("header", "true")
+//    .option("mode", "FAILFAST")
+    .schema(myManualSchema)
+    .option("path", filePath)
+    .load
+
+  manualCSV.show(false)
+  manualCSV.printSchema()
+  //so one reason for forcing your own schema on Spark would be so your numeric columns do not turn into strings
+
+  //JSON in SPARK can be loaded from two types of files
+  //DEFAULT line-delimited JSON meaning each line is valid JSON (usually an JSON object (a collection key:value pairs
+  //alternative is multiline (more common in web development, web data)
+
+  val foodPath = "./src/resources/json/foods.json"
+  val properFoodPath = "./src/resources/json/properFoods.json"
+
+  val fromLineDelimited = spark
+    .read
+    .format("json") //we let spark figure out the schema automatically usually it is okay
+    .load(foodPath) //by default it reads each entry from single row of text in json
+
+  fromLineDelimited.show(false)
+
+  val fromMultiLineJSON = spark
+    .read
+//    .format(source = "json")
+    .option("multiLine", value = true) // so we are reading regular JSON here meaning it is spread over multiple lines
+    .json(properFoodPath) //so json method simply combines format and load into one specific call
+  fromMultiLineJSON.show(false)
+
+  val parquetFilePath = "./src/resources/flight-data/parquet/2010-summary.parquet"
+
+  val fromParquetDF = spark
+    .read
+    .format("parquet")
+    .load(parquetFilePath)
+
+  fromParquetDF.printSchema()
+  fromParquetDF.show(5,false)
+
+  manualCSV.write
+    .format("parquet")
+    .mode("overwrite")
+    .save("./src/resources/parquet/jul7")
+
+  val fromManualCSV = spark.read
+    .format("parquet")
+    .load("./src/resources/parquet/jul7")
+
+  fromManualCSV.printSchema()
+  fromManualCSV.show(false)
+
+  //only two options for parquet read and write
+//https://spark.apache.org/docs/latest/sql-data-sources-parquet.html
+  //can compress even more when writing
+  //can add columns when reading
+
+  //ORC files
+  //What is the difference between ORC and Parquet?
+  //For the most part, they’re quite similar; the fundamental difference is that Parquet is further
+  //optimized for use with Spark, whereas ORC is further optimized for Hive.
+  //generally Parquet will be a bit faster on Spark specific workloads
+
+  val orcFilepath = "./src/resources/flight-data/orc/2010-summary.orc"
+
+//not needed but we could pass a manual schema when reading
+  val myFlightSchema = StructType(Array(
+    StructField("DEST_COUNTRY_NAME", StringType, nullable = true),
+    StructField("ORIGIN_COUNTRY_NAME", StringType, nullable = true),
+    StructField("count", LongType, nullable = false,
+      Metadata.fromJson("{\"hello\":\"world\"}"))
+  ))
+
+  spark.read
+    .format("orc")
+    .load(orcFilepath)
+    .show(5, false)
+
+  fromManualCSV.write
+    .format("orc")
+    .mode("overwrite") //since we are going to run this example over and over
+    .save("./src/resources/orc/jul7")
+
+  spark.read
+    .format("orc")
+    .load("./src/resources/orc/jul7")
+    .show(false)
 }
