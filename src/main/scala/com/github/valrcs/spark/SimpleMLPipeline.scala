@@ -149,4 +149,16 @@ object SimpleMLPipeline extends App {
   //TODO evaluate our accuracy using ML lib since accuracy measurement is basically required to check if our model works!
 
   //TODO build a full pipeline of commands (meaning combine the above steps into one whole)
+
+  //Pipelining Our Workflow
+//  writing all the steps and
+//  keeping track of DataFrames ends up being quite tedious. That’s why Spark includes the
+//  Pipeline concept. A pipeline allows you to set up a dataflow of the relevant transformations
+//  that ends with an estimator that is automatically tuned according to your specifications, resulting
+//  in a tuned model ready for use.
+
+  //Note that it is essential that instances of transformers or models are not reused across different
+  //pipelines. Always create a new instance of a model before creating another pipeline
+
+
 }
