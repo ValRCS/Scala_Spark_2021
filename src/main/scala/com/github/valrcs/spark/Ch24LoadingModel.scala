@@ -21,11 +21,15 @@ object Ch24LoadingModel extends App {
     .format("json")
     .load(filePath)
 
+  df.printSchema()
   df.show(5)
 
   val Array(train, test) = df.randomSplit(Array(0.7, 0.3))
 
   val fittedTest = model.transform(test)
   fittedTest.show(10, false)
+
+  val fittedDF = model.transform(df)
+  fittedDF.show(10, false)
 
 }

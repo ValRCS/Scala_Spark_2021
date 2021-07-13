@@ -1,11 +1,11 @@
-color, lab, value1, value2
-red, good, 2, 15.2
-green, bad, 3, 16.6
-blue, good, 8, 17.7
-blue, bad, 18, 17.7
-blue, good, 8, 17.7
-blue, bad, 8, 37.7
-red, good, 2, 15.2
-red, bad, 12, 15.2
-red, good, 20, 15.2
-green, good, 3, 36.6
+color,lab,value1,value2
+red,good,2,15.2
+green,bad,3,16.6
+blue,good,8,17.7
+blue,bad,18,17.7
+blue,good,8,17.7
+blue,bad,8,37.7
+red,good,2,15.2
+red,bad,12,15.2
+red,good,20,15.2
+green,good,3,36.6
