@@ -1,6 +1,6 @@
 package com.github.valrcs.spark
 
-import org.apache.spark.ml.classification.{GBTClassifier, LinearSVC, NaiveBayes, RandomForestClassifier}
+import org.apache.spark.ml.classification.{Classifier, GBTClassifier, LinearSVC, NaiveBayes, RandomForestClassifier}
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.feature.RFormula
 import org.apache.spark.ml.regression.RandomForestRegressor
@@ -95,4 +95,17 @@ object ExerciseJul15 extends App {
   testDF.show(30,false)
 
   showAccuracy((testDF))
+
+//  def createAndTestModel(algorithm:Classifier[FeaturesType, E, M], train:DataFrame, test:DataFrame):Unit = {
+//    val fittedModel = algorithm.fit
+//  }
+  val naiveBayes = new NaiveBayes()
+    .setLabelCol("label")
+    .setFeaturesCol("features")
+
+  val naiveBayesModel = naiveBayes.fit(train)
+  val testBayesDF = naiveBayesModel.transform(test)
+
+  showAccuracy(testBayesDF)
+
 }
