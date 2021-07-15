@@ -1,6 +1,8 @@
 package com.github.valrcs.spark
 
-import org.apache.spark.ml.feature.RFormula
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
+import org.apache.spark.ml.feature.{Bucketizer, RFormula, StringIndexer, VectorAssembler}
+import org.apache.spark.sql.DataFrame
 
 object IrisesClassification extends App {
   val spark = SparkUtil.createSpark("irisesClassification")
@@ -46,10 +48,60 @@ object IrisesClassification extends App {
 
   testDF.show(30,false) //we should have roughly 30 (since 20% of 150 is 30)
 
+
+  //let's how to make a features column using  VectorAssembler
+  val va = new VectorAssembler()
+    .setInputCols(Array("_c0","_c1","_c2","_c3"))
+    .setOutputCol("features") //default name is kind of ugly vecAssembler
+  val tdf = va.transform(df)
+  tdf.show(5, false)
+
+  //let's convert our string label _c4 into a numerical value
+
+  val labelIndexer = new StringIndexer().setInputCol("_c4").setOutputCol("label")
+  val labelDF = labelIndexer.fit(tdf).transform(tdf)
+  labelDF.show(5,false)
+
+  val fittedModel2 = decTree.fit(labelDF) //create a new model but I used ALL of the data!!!
+  //so using test dataframe is sort of useless because we alreday learned from the whole dataset, so chance of overfit is extremely
+
+  val fittedDF = fittedModel2.transform(test)
+  fittedDF.show(5, false)
+
+  //bare minimum to make a prediction with some classifier model is to have a Vector[Double] column default name being features
+  fittedModel2.transform(test.select("features")).show(5, false)
+
+  def showAccuracy(df: DataFrame): Unit = {
+    // Select (prediction, true label) and compute test error.
+    val evaluator = new MulticlassClassificationEvaluator()
+      .setLabelCol("label")
+      .setPredictionCol("prediction")
+      .setMetricName("accuracy")
+    val accuracy = evaluator.evaluate(df) //in order for this to work we need label and prediction columns
+    println(s"DF size: ${df.count()} Accuracy $accuracy - Test Error = ${(1.0 - accuracy)}")
+  }
+  showAccuracy(fittedDF)
+  showAccuracy(testDF)
+
+
+  //so why is this a bit misleading this 100% accuracy ?
+
   //TODO compare Decision Tree with Logistic Regression and some other Classifier algorithms
 
   //TODO move onto Regression (quantitative predictions)
 
+  //lets try a bad Decision Tree
+
+//  val badDecTreeModel = new DecisionTreeClassifier()
+
+  //creating a label with a bucketer out of some numeric column
+  val bucketBorders = Array(0.0, 3, 4.7, 5, 6, 10) //Array head should be less or equal to min value and tail should be more or equal to max value of our column
+  val bucketer = new Bucketizer()
+    .setSplits(bucketBorders)
+    .setInputCol("_c0")
+    .setOutputCol("label")
+  val bucketedDF = bucketer.transform(df)
+  bucketedDF.show(5, false)
 
 
 }
