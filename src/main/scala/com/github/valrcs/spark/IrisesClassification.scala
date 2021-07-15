@@ -1,7 +1,9 @@
 package com.github.valrcs.spark
 
+import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.feature.{Bucketizer, RFormula, StringIndexer, VectorAssembler}
+import org.apache.spark.ml.tuning.{ParamGridBuilder, TrainValidationSplit}
 import org.apache.spark.sql.DataFrame
 
 object IrisesClassification extends App {
@@ -86,8 +88,6 @@ object IrisesClassification extends App {
 
   //so why is this a bit misleading this 100% accuracy ?
 
-  //TODO compare Decision Tree with Logistic Regression and some other Classifier algorithms
-
   //TODO move onto Regression (quantitative predictions)
 
   //lets try a bad Decision Tree
@@ -103,5 +103,61 @@ object IrisesClassification extends App {
   val bucketedDF = bucketer.transform(df)
   bucketedDF.show(5, false)
 
+  val badDecisionTreeClassifier = new DecisionTreeClassifier()
+    .setLabelCol("label")
+    .setFeaturesCol("features")
+    //so lets try changing some hyper parameters
+    .setMaxDepth(1) //so only one question, what do you thing it will do to the accuracy ? ;)
 
+  val badDecModel = badDecisionTreeClassifier.fit(train) //create a new model but I used ALL of the data!!!
+  //so using test dataframe is sort of useless because we alreday learned from the whole dataset, so chance of overfit is extremely
+
+  val badTestDF = badDecModel.transform(test)
+
+  showAccuracy(badTestDF)
+
+  def decisionTreeTester(classifier:DecisionTreeClassifier, train: DataFrame, test: DataFrame):Unit = {
+    val model = classifier.fit(train)
+    val df = model.transform(test)
+    showAccuracy(df)
+  }
+
+  badDecisionTreeClassifier.setMaxDepth(2) //so now it should be a bit better
+  decisionTreeTester(badDecisionTreeClassifier, train, test)
+
+  println("this is our own pipeline tester")
+  (1 to 5).foreach(n => {
+    badDecisionTreeClassifier.setMaxDepth(n)
+    decisionTreeTester(badDecisionTreeClassifier, train,test )})
+
+  //lets do the official pipeline tester
+
+  val stages = Array(decTree) //we are only going to test hyperparameters for our decision tree
+  val pipeline = new Pipeline().setStages(stages)
+
+  val params = new ParamGridBuilder()
+    .addGrid(decTree.maxDepth, Array(1,2,3,4,5)) //so doing the same as the foreach loop
+    .build()
+
+  val evaluator = new MulticlassClassificationEvaluator()
+    .setLabelCol("label")
+    .setPredictionCol("prediction")
+    .setMetricName("accuracy")
+
+  val tvs = new TrainValidationSplit()
+    .setTrainRatio(0.75) // also the default. 75% for training
+    .setEstimatorParamMaps(params)
+    .setEstimator(pipeline)
+    .setEvaluator(evaluator)
+
+  val tvsFitted = tvs.fit(train) //this is where all the work is done (and takes the longest)
+
+  val testResults = evaluator.evaluate(tvsFitted.transform(test)) //this will tell us how the best model works
+  println(s"Our model is $testResults accurate on test data set")
+
+  val trainedPipeline = tvsFitted.bestModel.asInstanceOf[PipelineModel] //so we extract the best model out of our pipeline
+  //then we want to know what the best parameters are
+  import org.apache.spark.ml.classification.DecisionTreeClassificationModel
+  val trainedDecTree = trainedPipeline.stages(0).asInstanceOf[DecisionTreeClassificationModel]
+  println(trainedDecTree.toDebugString)
 }
