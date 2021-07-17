@@ -14,11 +14,26 @@ object GenerateRandomData extends App {
 
   df.show(5)
 
-  df.write
-    .format("csv")
-    .option("path", filePath)
-    .option("header", true)
-    .mode("overwrite")
-    .save
+//  df.write
+//    .format("csv")
+//    .option("path", filePath)
+//    .option("header", true)
+//    .mode("overwrite")
+//    .save
+
+  val df2d = spark.range(100)
+    .toDF
+    .withColumnRenamed("id", "x1")
+    .withColumn("x2", expr("x1+1000")) //x2 will dominate x1 at least at the beginnning
+    .withColumn("y", expr("round(500 + x1*2.5 + x2*4 + rand()*20-10, 3)")) //random +- 10 noise
+
+  df2d.show(5, false)
+
+    df2d.write
+      .format("csv")
+      .option("path", "./src/resources/csv/range2d")
+      .option("header", true)
+      .mode("overwrite")
+      .save
 
 }

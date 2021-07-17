@@ -1,6 +1,8 @@
 package com.github.valrcs.spark
 
 import org.apache.spark.ml.regression.LinearRegression
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.functions.expr
 
 object Ch27Regression extends App {
   val spark = SparkUtil.createSpark("regressions")
@@ -41,4 +43,21 @@ object Ch27Regression extends App {
   val coefficient = lrModel.coefficients(0) //we only have one cofficient since we only have one column of x
   println(s"Intercept: $intercept and coefficient is $coefficient")
   //if y = ax+b then coefficient is a and intercept is b
+
+  //so if you do not have a dataframe or some table to load this is the approach you may use
+  val testValues = Seq(200,300,-100, 1000) //this is just some random data
+
+  import spark.implicits._ //will let us use toDF()
+  val arrayDF = testValues.toDF()
+  arrayDF.show()
+//  val arrayFeaturesDF = arrayDF
+//    .withColumn("features", expr("array(DOUBLE(value))")) //so this is an alternative to RFormula without labels
+val featureFormula= new RFormula()
+  .setFormula("~ . ") //so we want to only create features out of ALL (here 1) columns no labels
+
+  val arrayFeaturesDF = featureFormula.fit(arrayDF).transform(arrayDF)
+
+  val arrayPredicted = lrModel.transform(arrayFeaturesDF)
+
+  arrayPredicted.show(false)
 }
