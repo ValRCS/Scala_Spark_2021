@@ -108,6 +108,8 @@ object IrisesClassification extends App {
     .setFeaturesCol("features")
     //so lets try changing some hyper parameters
     .setMaxDepth(1) //so only one question, what do you thing it will do to the accuracy ? ;)
+    //.setMaxDepth(2) it would not be so bad anymore for our Irises
+  //.setMaxDepth(5) would theoretically cover up to and including 32 distinct answers/classifications/categories
 
   val badDecModel = badDecisionTreeClassifier.fit(train) //create a new model but I used ALL of the data!!!
   //so using test dataframe is sort of useless because we alreday learned from the whole dataset, so chance of overfit is extremely
@@ -136,7 +138,7 @@ object IrisesClassification extends App {
   val pipeline = new Pipeline().setStages(stages)
 
   val params = new ParamGridBuilder()
-    .addGrid(decTree.maxDepth, Array(1,2,3,4,5)) //so doing the same as the foreach loop
+    .addGrid(decTree.maxDepth, Array(1,2,3,4,5)) //so doing the same as the foreach loop for depths
     .build()
 
   val evaluator = new MulticlassClassificationEvaluator()
