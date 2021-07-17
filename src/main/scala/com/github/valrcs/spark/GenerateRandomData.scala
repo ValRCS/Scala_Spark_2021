@@ -29,11 +29,26 @@ object GenerateRandomData extends App {
 
   df2d.show(5, false)
 
-    df2d.write
+//    df2d.write
+//      .format("csv")
+//      .option("path", "./src/resources/csv/range2d")
+//      .option("header", true)
+//      .mode("overwrite")
+//      .save
+
+  val df3d = spark.range(100)
+    .toDF
+    .withColumnRenamed("id", "x1")
+    .withColumn("x2", expr("x1+20")) //x2 will dominate x1 at least at the beginnning
+    .withColumn("x3", expr("x1-20")) //x2 will dominate x1 at least at the beginnning
+    .withColumn("y", expr("round(100 + x1*2 + x2*3 + x3*5 + rand()-0.5, 3)")) //random +- 10 noise
+
+  df3d.show(5, false)
+
+    df3d.write
       .format("csv")
-      .option("path", "./src/resources/csv/range2d")
+      .option("path", "./src/resources/csv/range3d")
       .option("header", true)
       .mode("overwrite")
       .save
-
 }
