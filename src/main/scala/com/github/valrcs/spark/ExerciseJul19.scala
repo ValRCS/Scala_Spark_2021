@@ -1,5 +1,6 @@
 package com.github.valrcs.spark
 
+import org.apache.spark.ml.regression.LinearRegression
 import org.apache.spark.sql.functions.{avg, col, desc, expr, lit, round}
 
 object ExerciseJul19 extends App {
@@ -57,4 +58,43 @@ object ExerciseJul19 extends App {
       "OVER (PARTITION BY Name " +
       "ORDER BY date )"))
   dfWithPreviousDay.show(10, false)
+
+  import org.apache.spark.ml.feature.RFormula
+  val supervised = new RFormula()
+    .setFormula("open ~ prevOpen + prevClose ")
+
+  val ndf = supervised
+    .fit(dfWithPreviousDay) //prepares the formula
+    .transform(dfWithPreviousDay) //generally transform will create the new data
+
+  ndf.show(10, false)
+
+  val cleanDf = ndf.where("prevOpen != 0.0")
+  cleanDf.show(10, false)
+
+  val linReg = new LinearRegression()
+
+  val Array(train,test) = cleanDf.randomSplit(Array(0.75,0.25))
+
+  val lrModel = linReg.fit(train)
+
+  val intercept = lrModel.intercept
+  val coefficients = lrModel.coefficients
+  val x1 = coefficients(0)
+  val x2 = coefficients(1) //of course we would have to know how many x columns we have as features
+
+  println(s"Intercept: $intercept and coefficient for x1 is $x1 and for x2 is $x2")
+  //simple linear regression is unlikely to yield anything on financial data which follow random walk,
+  //but the idea is what is important
+  //here we see that the last day's closing price is dominating the previous day's opening price
+  //which is natural since the opening day does correlate strongly with yesterday's closing
+
+  val summary = lrModel.summary
+
+  //to truly test this model we should be using different stocks or different dates for these 3 stocks
+
+  val predictedDf = lrModel.transform(test)
+
+  predictedDf.show(10, false)
+
 }
