@@ -16,4 +16,24 @@ object ExerciseJul20 extends App {
 
   //lets use Euclidian disantance in 3 dimension so moveement would be Square root of xdelta squared + ydelta squared + zdelta squared
 
+  //TODO read part-01.json
+  val filePath = "src/resources/activity-data/part-01.json"
+  val df = spark.read
+    .format("json")
+    .load(filePath)
+
+  //TODO get schema
+  df.printSchema()
+  df.show(10, false)
+
+  //TODO count how many walking events there were for user i
+  val walkingCount = df.where("user == 'i'")
+    .where("gt == 'walk'")
+    .count()
+  println(s"The user i has $walkingCount walking events")
+
+  val walkDf = df.where("user == 'i'")
+    .where("gt == 'walk'")
+
+  walkDf.show(5, false)
 }
