@@ -14,4 +14,6 @@ object ExerciseJul20 extends App {
   //above would probably involve Window functios
   // TODO this would involve sorting by Creation Time
 
+  //lets use Euclidian disantance in 3 dimension so moveement would be Square root of xdelta squared + ydelta squared + zdelta squared
+
 }
