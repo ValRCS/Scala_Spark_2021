@@ -1,5 +1,7 @@
 package com.github.valrcs.spark
 
+import org.apache.spark.sql.functions.expr
+
 object ExerciseJul20 extends App {
   val spark = SparkUtil.createSpark("exerciseJul20")
 
@@ -34,6 +36,23 @@ object ExerciseJul20 extends App {
 
   val walkDf = df.where("user == 'i'")
     .where("gt == 'walk'")
-
+    .withColumn("distance", expr("ROUND(SQRT(POW(x,2)+POW(y,2)+POW(z,2)),4)")) //x,y,z are deltas already
+//perhaps z should not be included when walking, it seems to measure up and down movement in your pocket
   walkDf.show(5, false)
+
+  walkDf
+    .select(expr("ROUND(SUM(distance),4)"))
+    .show()
+
+  //how to get specific values out of dataFrame in specific type
+  //https://stackoverflow.com/questions/58602034/in-scala-how-to-convert-the-result-in-sql-query-row-to-double
+  import spark.implicits._
+  val distanceWalked =   walkDf
+    .select(expr("ROUND(SUM(distance),4)"))
+    .as[Double].first() //we would have multiple values possibly we want the first (and only here)
+
+
+  println(s"Walked $distanceWalked units(meters?)")
+
+
 }
